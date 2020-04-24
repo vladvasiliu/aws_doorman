@@ -13,7 +13,6 @@ fern = "0.6"
 log = "0.4"
 roxmltree = "0.11"
 rusoto_core = "0.43.0"
-rusoto_credential = "0.43.0"
 rusoto_ec2 = "0.43.0"
 tokio = { version = "0.2", features = ["rt-core", "macros"] }
 

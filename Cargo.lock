@@ -76,7 +76,6 @@ dependencies = [
  "log",
  "roxmltree",
  "rusoto_core",
- "rusoto_credential",
  "rusoto_ec2",
  "tokio",
 ]

@@ -17,7 +17,7 @@ async fn main() {
 
     let ec2_client = Ec2Client::new(Region::EuWest3);
     match EC2Instance::from_query(String::from("i-1234"), ec2_client).await {
-        Ok(_) => info!("Ok!"),
+        Ok(instance) => info!("{:#?}", instance),
         Err(err) => error!("{}", err),
     }
 }
