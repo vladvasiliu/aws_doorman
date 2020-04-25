@@ -1,13 +1,13 @@
 [package]
 name = "aws_ssh"
 version = "0.1.0"
-authors = ["Vlad Vasiliu <code@vladvasiliu.com>"]
+authors = ["Vlad Vasiliu"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { git = "https://github.com/clap-rs/clap/" }
+clap = { git = "https://github.com/clap-rs/clap/", features = ["color"] }
 external-ip = "1.0"
 fern = "0.6"
 log = "0.4"

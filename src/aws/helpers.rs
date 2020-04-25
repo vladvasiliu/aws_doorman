@@ -3,7 +3,7 @@ use rusoto_ec2::{Instance, InstanceState};
 use crate::aws::error::EC2InstanceError;
 use std::net::IpAddr;
 
-pub(in crate::aws) fn is_running(instance: &Instance) -> Result<bool, EC2InstanceError> {
+pub fn is_running(instance: &Instance) -> Result<bool, EC2InstanceError> {
     match &instance.state {
         Some(InstanceState { code: Some(16), .. }) => Ok(true),
         Some(state) => {
@@ -20,10 +20,7 @@ pub(in crate::aws) fn is_running(instance: &Instance) -> Result<bool, EC2Instanc
     }
 }
 
-pub(in crate::aws) fn has_security_group(
-    instance: &Instance,
-    sg_id: &str,
-) -> Result<bool, EC2InstanceError> {
+pub fn has_security_group(instance: &Instance, sg_id: &str) -> Result<bool, EC2InstanceError> {
     if let Some(sg_vec) = &instance.security_groups {
         if sg_vec
             .iter()
@@ -36,7 +33,7 @@ pub(in crate::aws) fn has_security_group(
     Err(EC2InstanceError::SecurityGroupNotAttached)
 }
 
-pub(in crate::aws) fn get_public_ip(instance: &Instance) -> Result<IpAddr, EC2InstanceError> {
+pub fn get_public_ip(instance: &Instance) -> Result<IpAddr, EC2InstanceError> {
     match &instance.public_ip_address {
         None => Err(EC2InstanceError::InstanceHasNoPublicIP),
         Some(ip) => ip
@@ -45,7 +42,7 @@ pub(in crate::aws) fn get_public_ip(instance: &Instance) -> Result<IpAddr, EC2In
     }
 }
 
-pub(in crate::aws) fn get_only_item<T>(item_vec: &Option<Vec<T>>) -> Result<&T, EC2InstanceError> {
+pub fn get_only_item<T>(item_vec: &Option<Vec<T>>) -> Result<&T, EC2InstanceError> {
     match item_vec {
         Some(item_vec) if item_vec.len() == 1 => Ok(&item_vec[0]),
         Some(item_vec) if item_vec.len() > 1 => {

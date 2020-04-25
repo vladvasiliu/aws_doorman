@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::net::AddrParseError;
 use std::{fmt, fmt::Formatter};
 
@@ -17,6 +18,8 @@ pub enum EC2InstanceError {
     InstanceHasIncorrectState(String),
     SecurityGroupNotAttached,
 }
+
+impl Error for EC2InstanceError {}
 
 impl fmt::Display for EC2InstanceError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

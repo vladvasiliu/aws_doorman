@@ -5,25 +5,37 @@ use rusoto_core::Region;
 use rusoto_ec2::Ec2Client;
 
 use crate::aws::AWSClient;
+use crate::config::Config;
+use std::error::Error;
 
 mod aws;
+mod config;
 mod ip;
 
 #[tokio::main]
 async fn main() {
     setup_logger(LevelFilter::Debug).unwrap();
-    let _external_ip = ip::guess().await.unwrap_or_else(|_| exit(1));
+    // let _my_external_ip = ip::guess().await.unwrap_or_else(|_| exit(1));
+    let config = Config::from_args();
 
+    match work(config).await {
+        Ok(()) => info!("Done!"),
+        Err(err) => {
+            error!("{}", err);
+            exit(1)
+        }
+    }
+}
+
+async fn work(config: Config) -> Result<(), Box<dyn Error>> {
     let ec2_client = Ec2Client::new(Region::EuWest3);
     let aws_client = AWSClient {
         ec2_client,
-        instance_id: String::from("i-1234"),
-        sg_id: String::from("sg-1234"),
+        instance_id: config.instance_id,
+        sg_id: config.sg_id,
     };
-    match aws_client.get_instance_ip().await {
-        Ok(instance) => info!("{:#?}", instance),
-        Err(err) => error!("{}", err),
-    }
+    let _instance_ip = aws_client.get_instance_ip().await?;
+    Ok(())
 }
 
 fn setup_logger(level: log::LevelFilter) -> Result<(), fern::InitError> {

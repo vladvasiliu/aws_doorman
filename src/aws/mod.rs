@@ -5,7 +5,7 @@ use rusoto_ec2::{DescribeInstancesRequest, Ec2, Ec2Client, Instance};
 use crate::aws::error::EC2InstanceError;
 use crate::aws::helpers::{get_only_item, get_public_ip, has_security_group, is_running};
 
-pub mod error;
+mod error;
 mod helpers;
 
 pub struct AWSClient {
