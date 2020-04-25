@@ -1,84 +1,9 @@
-use std::{fmt, net::IpAddr, result::Result};
+use std::{fmt, fmt::Formatter};
+use std::net::AddrParseError;
 
 use rusoto_core::request::BufferedHttpResponse;
 use rusoto_core::RusotoError;
-use rusoto_ec2::{
-    DescribeInstancesError, DescribeInstancesRequest, Ec2, Ec2Client, Instance, InstanceState,
-    Reservation,
-};
-use std::fmt::Formatter;
-use std::net::AddrParseError;
-
-#[derive(Debug)]
-pub struct EC2Instance {
-    pub id: String,
-    pub name: Option<String>,
-    pub ip_addresses: Vec<IpAddr>,
-    pub running: bool,
-}
-
-impl EC2Instance {
-    fn from_reservation(reservation: &Reservation) -> Result<Self, EC2InstanceError> {
-        let instance: &Instance = match &reservation.instances {
-            None => return Err(EC2InstanceError::DescribeInstancesReturnedNone),
-            Some(x) if x.is_empty() => return Err(EC2InstanceError::DescribeInstancesReturnedNone),
-            Some(x) if x.len() > 1 => {
-                return Err(EC2InstanceError::DescribeInstancesReturnedTooMany)
-            }
-            Some(x) => &x[0],
-        };
-
-        // Every instance has an ID
-        let id = instance.instance_id.as_deref().unwrap().to_string();
-
-        let running = match &instance.state {
-            Some(InstanceState { code: Some(16), .. }) => true,
-            Some(state) => {
-                let code = state.code.unwrap_or_default();
-                let name = state.name.as_deref().unwrap_or_default();
-                return Err(EC2InstanceError::InstanceHasIncorrectState(format!(
-                    "{} - {}",
-                    code, name
-                )));
-            }
-            None => {
-                return Err(EC2InstanceError::InstanceHasIncorrectState(
-                    "unknown".to_string(),
-                ))
-            }
-        };
-
-        let public_ip: IpAddr = match &instance.public_ip_address {
-            None => return Err(EC2InstanceError::InstanceHasNoPublicIP),
-            Some(ip) => ip.parse()?,
-        };
-
-        Ok(Self {
-            id,
-            name: None,
-            ip_addresses: vec![public_ip],
-            running,
-        })
-    }
-
-    pub async fn from_query(id: String, ec2_client: Ec2Client) -> Result<Self, EC2InstanceError> {
-        let describe_instance_request = DescribeInstancesRequest {
-            instance_ids: Some(vec![id]),
-            ..Default::default()
-        };
-        let describe_instance_result = ec2_client
-            .describe_instances(describe_instance_request)
-            .await?;
-
-        // We're expecting one and only one instance
-        match describe_instance_result.reservations {
-            None => Err(EC2InstanceError::DescribeInstancesReturnedNone),
-            Some(x) if x.is_empty() => Err(EC2InstanceError::DescribeInstancesReturnedNone),
-            Some(x) if x.len() > 1 => Err(EC2InstanceError::DescribeInstancesReturnedTooMany),
-            Some(x) => Self::from_reservation(&x[0]),
-        }
-    }
-}
+use rusoto_ec2::DescribeInstancesError;
 
 #[derive(Debug)]
 pub enum EC2InstanceError {

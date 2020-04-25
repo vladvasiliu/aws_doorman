@@ -1,11 +1,10 @@
 use std::process::exit;
 
-use fern;
 use log::{error, info, LevelFilter};
 use rusoto_core::Region;
 use rusoto_ec2::Ec2Client;
 
-use crate::aws::ec2::EC2Instance;
+use crate::aws::EC2Instance;
 
 mod aws;
 mod ip;
@@ -13,7 +12,7 @@ mod ip;
 #[tokio::main]
 async fn main() {
     setup_logger(LevelFilter::Debug).unwrap();
-    let external_ip = ip::guess().await.unwrap_or_else(|_| exit(1));
+    let _external_ip = ip::guess().await.unwrap_or_else(|_| exit(1));
 
     let ec2_client = Ec2Client::new(Region::EuWest3);
     match EC2Instance::from_query(String::from("i-1234"), ec2_client).await {
