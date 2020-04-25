@@ -2,6 +2,7 @@ use std::{net::IpAddr, result::Result};
 
 use rusoto_ec2::{DescribeInstancesRequest, Ec2, Ec2Client, Instance, Reservation};
 
+use crate::aws::error::EC2InstanceError::DescribeInstancesReturnedNone;
 use crate::aws::helpers::get_public_ip;
 use crate::aws::{
     error::EC2InstanceError,
@@ -35,23 +36,19 @@ impl AWSClient {
 
         // We're expecting one and only one instance, so there should only be one reservation
         let reservation: &Reservation = match &di_res.reservations {
-            None => return Err(EC2InstanceError::DescribeInstancesReturnedNone),
-            Some(x) if x.is_empty() => return Err(EC2InstanceError::DescribeInstancesReturnedNone),
+            Some(x) if x.len() == 1 => &x[0],
             Some(x) if x.len() > 1 => {
                 return Err(EC2InstanceError::DescribeInstancesReturnedTooMany)
             }
-            Some(x) => &x[0],
+            _ => return Err(EC2InstanceError::DescribeInstancesReturnedNone),
         };
 
         let instance = match &reservation.instances {
-            None => return Err(EC2InstanceError::DescribeInstancesReturnedNone),
-            Some(instance_vec) if instance_vec.is_empty() => {
-                return Err(EC2InstanceError::DescribeInstancesReturnedNone)
-            }
+            Some(instance_vec) if instance_vec.len() == 1 => &instance_vec[0],
             Some(instance_vec) if instance_vec.len() > 1 => {
                 return Err(EC2InstanceError::DescribeInstancesReturnedTooMany)
             }
-            Some(instance_vec) => &instance_vec[0],
+            _ => return Err(EC2InstanceError::DescribeInstancesReturnedNone),
         };
 
         self.is_instance_sane(instance)?;
