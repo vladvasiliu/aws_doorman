@@ -1,5 +1,5 @@
-use std::{fmt, fmt::Formatter};
 use std::net::AddrParseError;
+use std::{fmt, fmt::Formatter};
 
 use rusoto_core::request::BufferedHttpResponse;
 use rusoto_core::RusotoError;
@@ -15,6 +15,7 @@ pub enum EC2InstanceError {
     InstanceHasNoPublicIP,
     InstanceHasMalformedPublicIP(AddrParseError),
     InstanceHasIncorrectState(String),
+    SecurityGroupNotAttached,
 }
 
 impl fmt::Display for EC2InstanceError {
@@ -36,6 +37,9 @@ impl fmt::Display for EC2InstanceError {
             }
             Self::InstanceHasIncorrectState(err) => {
                 msg.push_str(&format!("Incorrect state: {}", err))
+            }
+            Self::SecurityGroupNotAttached => {
+                msg.push_str("The requested security group is not attached")
             }
         }
         write!(f, "{}", msg)
@@ -87,6 +91,7 @@ impl fmt::Display for HttpResponseDescription {
     }
 }
 
+// Needed because Rusoto always returns an Unknown error.
 impl From<BufferedHttpResponse> for HttpResponseDescription {
     fn from(hrd: BufferedHttpResponse) -> Self {
         let doc = String::from_utf8(hrd.body.to_vec()).unwrap();

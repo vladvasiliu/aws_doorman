@@ -2,21 +2,39 @@ use std::{net::IpAddr, result::Result};
 
 use rusoto_ec2::{DescribeInstancesRequest, Ec2, Ec2Client, Instance, Reservation};
 
-use crate::{aws::error::EC2InstanceError, aws::helpers::is_running};
+use crate::aws::helpers::get_public_ip;
+use crate::aws::{
+    error::EC2InstanceError,
+    helpers::{has_security_group, is_running},
+};
 
 pub mod error;
 mod helpers;
 
-#[derive(Debug)]
-pub struct EC2Instance {
-    pub id: String,
-    pub name: Option<String>,
-    pub ip_addresses: Vec<IpAddr>,
+pub struct AWSClient {
+    pub ec2_client: Ec2Client,
+    pub instance_id: String,
+    pub sg_id: String,
 }
 
-impl EC2Instance {
-    fn from_reservation(reservation: &Reservation) -> Result<Self, EC2InstanceError> {
-        let instance: &Instance = match &reservation.instances {
+impl AWSClient {
+    pub fn is_instance_sane(&self, instance: &Instance) -> Result<bool, EC2InstanceError> {
+        is_running(instance)?;
+        has_security_group(instance, &self.sg_id)?;
+        Ok(true)
+    }
+
+    pub async fn get_instance_ip(&self) -> Result<IpAddr, EC2InstanceError> {
+        let di_res = self
+            .ec2_client
+            .describe_instances(DescribeInstancesRequest {
+                instance_ids: Some(vec![self.instance_id.clone()]),
+                ..Default::default()
+            })
+            .await?;
+
+        // We're expecting one and only one instance, so there should only be one reservation
+        let reservation: &Reservation = match &di_res.reservations {
             None => return Err(EC2InstanceError::DescribeInstancesReturnedNone),
             Some(x) if x.is_empty() => return Err(EC2InstanceError::DescribeInstancesReturnedNone),
             Some(x) if x.len() > 1 => {
@@ -25,38 +43,18 @@ impl EC2Instance {
             Some(x) => &x[0],
         };
 
-        // Every instance has an ID
-        let id = instance.instance_id.as_deref().unwrap().to_string();
-
-        is_running(&instance.state)?;
-
-        let public_ip: IpAddr = match &instance.public_ip_address {
-            None => return Err(EC2InstanceError::InstanceHasNoPublicIP),
-            Some(ip) => ip.parse()?,
+        let instance = match &reservation.instances {
+            None => return Err(EC2InstanceError::DescribeInstancesReturnedNone),
+            Some(instance_vec) if instance_vec.is_empty() => {
+                return Err(EC2InstanceError::DescribeInstancesReturnedNone)
+            }
+            Some(instance_vec) if instance_vec.len() > 1 => {
+                return Err(EC2InstanceError::DescribeInstancesReturnedTooMany)
+            }
+            Some(instance_vec) => &instance_vec[0],
         };
 
-        Ok(Self {
-            id,
-            name: None,
-            ip_addresses: vec![public_ip],
-        })
-    }
-
-    pub async fn from_query(id: String, ec2_client: Ec2Client) -> Result<Self, EC2InstanceError> {
-        let describe_instance_request = DescribeInstancesRequest {
-            instance_ids: Some(vec![id]),
-            ..Default::default()
-        };
-        let describe_instance_result = ec2_client
-            .describe_instances(describe_instance_request)
-            .await?;
-
-        // We're expecting one and only one instance
-        match describe_instance_result.reservations {
-            None => Err(EC2InstanceError::DescribeInstancesReturnedNone),
-            Some(x) if x.is_empty() => Err(EC2InstanceError::DescribeInstancesReturnedNone),
-            Some(x) if x.len() > 1 => Err(EC2InstanceError::DescribeInstancesReturnedTooMany),
-            Some(x) => Self::from_reservation(&x[0]),
-        }
+        self.is_instance_sane(instance)?;
+        get_public_ip(instance)
     }
 }

@@ -4,7 +4,7 @@ use log::{error, info, LevelFilter};
 use rusoto_core::Region;
 use rusoto_ec2::Ec2Client;
 
-use crate::aws::EC2Instance;
+use crate::aws::AWSClient;
 
 mod aws;
 mod ip;
@@ -15,7 +15,12 @@ async fn main() {
     let _external_ip = ip::guess().await.unwrap_or_else(|_| exit(1));
 
     let ec2_client = Ec2Client::new(Region::EuWest3);
-    match EC2Instance::from_query(String::from("i-1234"), ec2_client).await {
+    let aws_client = AWSClient {
+        ec2_client,
+        instance_id: String::from("i-1234"),
+        sg_id: String::from("sg-1234"),
+    };
+    match aws_client.get_instance_ip().await {
         Ok(instance) => info!("{:#?}", instance),
         Err(err) => error!("{}", err),
     }
