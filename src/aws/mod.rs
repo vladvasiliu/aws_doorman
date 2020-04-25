@@ -1,13 +1,9 @@
 use std::{net::IpAddr, result::Result};
 
-use rusoto_ec2::{DescribeInstancesRequest, Ec2, Ec2Client, Instance, Reservation};
+use rusoto_ec2::{DescribeInstancesRequest, Ec2, Ec2Client, Instance};
 
-use crate::aws::error::EC2InstanceError::DescribeInstancesReturnedNone;
-use crate::aws::helpers::get_public_ip;
-use crate::aws::{
-    error::EC2InstanceError,
-    helpers::{has_security_group, is_running},
-};
+use crate::aws::error::EC2InstanceError;
+use crate::aws::helpers::{get_only_item, get_public_ip, has_security_group, is_running};
 
 pub mod error;
 mod helpers;
@@ -34,22 +30,10 @@ impl AWSClient {
             })
             .await?;
 
-        // We're expecting one and only one instance, so there should only be one reservation
-        let reservation: &Reservation = match &di_res.reservations {
-            Some(x) if x.len() == 1 => &x[0],
-            Some(x) if x.len() > 1 => {
-                return Err(EC2InstanceError::DescribeInstancesReturnedTooMany)
-            }
-            _ => return Err(EC2InstanceError::DescribeInstancesReturnedNone),
-        };
-
-        let instance = match &reservation.instances {
-            Some(instance_vec) if instance_vec.len() == 1 => &instance_vec[0],
-            Some(instance_vec) if instance_vec.len() > 1 => {
-                return Err(EC2InstanceError::DescribeInstancesReturnedTooMany)
-            }
-            _ => return Err(EC2InstanceError::DescribeInstancesReturnedNone),
-        };
+        // We're expecting one and only one instance,
+        // so there should only be one reservation with one instance
+        let reservation = get_only_item(&di_res.reservations)?;
+        let instance = get_only_item(&reservation.instances)?;
 
         self.is_instance_sane(instance)?;
         get_public_ip(instance)

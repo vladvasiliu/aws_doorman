@@ -44,3 +44,13 @@ pub(in crate::aws) fn get_public_ip(instance: &Instance) -> Result<IpAddr, EC2In
             .map_err(EC2InstanceError::InstanceHasMalformedPublicIP),
     }
 }
+
+pub(in crate::aws) fn get_only_item<T>(item_vec: &Option<Vec<T>>) -> Result<&T, EC2InstanceError> {
+    match item_vec {
+        Some(item_vec) if item_vec.len() == 1 => Ok(&item_vec[0]),
+        Some(item_vec) if item_vec.len() > 1 => {
+            Err(EC2InstanceError::DescribeInstancesReturnedTooMany)
+        }
+        _ => Err(EC2InstanceError::DescribeInstancesReturnedNone),
+    }
+}
