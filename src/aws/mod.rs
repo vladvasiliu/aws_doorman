@@ -2,7 +2,7 @@ use std::{net::IpAddr, result::Result};
 
 use rusoto_ec2::{DescribeInstancesRequest, Ec2, Ec2Client, Instance};
 
-use crate::aws::error::EC2InstanceError;
+use crate::aws::error::AWSClientError;
 use crate::aws::helpers::{get_only_item, get_public_ip, has_security_group, is_running};
 
 mod error;
@@ -15,13 +15,13 @@ pub struct AWSClient {
 }
 
 impl AWSClient {
-    pub fn is_instance_sane(&self, instance: &Instance) -> Result<bool, EC2InstanceError> {
+    pub fn is_instance_sane(&self, instance: &Instance) -> Result<bool, AWSClientError> {
         is_running(instance)?;
         has_security_group(instance, &self.sg_id)?;
         Ok(true)
     }
 
-    pub async fn get_instance_ip(&self) -> Result<IpAddr, EC2InstanceError> {
+    pub async fn get_instance_ip(&self) -> Result<IpAddr, AWSClientError> {
         let di_res = self
             .ec2_client
             .describe_instances(DescribeInstancesRequest {

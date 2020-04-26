@@ -2,12 +2,14 @@ use std::error::Error;
 use std::net::AddrParseError;
 use std::{fmt, fmt::Formatter};
 
+use rusoto_core::credential::CredentialsError;
 use rusoto_core::request::BufferedHttpResponse;
 use rusoto_core::RusotoError;
 use rusoto_ec2::DescribeInstancesError;
 
 #[derive(Debug)]
-pub enum EC2InstanceError {
+pub enum AWSClientError {
+    CredentialsError(CredentialsError),
     DescribeInstancesPermissionDenied(HttpResponseDescription),
     DescribeInstancesBadRequest(HttpResponseDescription),
     DescribeInstancesUnknownError(RusotoError<DescribeInstancesError>),
@@ -19,9 +21,9 @@ pub enum EC2InstanceError {
     SecurityGroupNotAttached,
 }
 
-impl Error for EC2InstanceError {}
+impl Error for AWSClientError {}
 
-impl fmt::Display for EC2InstanceError {
+impl fmt::Display for AWSClientError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut msg = String::from("Failed to get instance information: ");
         match self {
@@ -44,12 +46,15 @@ impl fmt::Display for EC2InstanceError {
             Self::SecurityGroupNotAttached => {
                 msg.push_str("The requested security group is not attached")
             }
+            Self::CredentialsError(err) => {
+                msg.push_str(&format!("Credentials error: {}", err));
+            }
         }
         write!(f, "{}", msg)
     }
 }
 
-impl From<RusotoError<DescribeInstancesError>> for EC2InstanceError {
+impl From<RusotoError<DescribeInstancesError>> for AWSClientError {
     fn from(err: RusotoError<DescribeInstancesError>) -> Self {
         match err {
             RusotoError::Unknown(http_resp) if http_resp.status == 400 => {
@@ -58,12 +63,13 @@ impl From<RusotoError<DescribeInstancesError>> for EC2InstanceError {
             RusotoError::Unknown(http_resp) if http_resp.status == 403 => {
                 Self::DescribeInstancesPermissionDenied(http_resp.into())
             }
+            RusotoError::Credentials(err) => Self::CredentialsError(err),
             _ => Self::DescribeInstancesUnknownError(err),
         }
     }
 }
 
-impl From<AddrParseError> for EC2InstanceError {
+impl From<AddrParseError> for AWSClientError {
     fn from(err: AddrParseError) -> Self {
         Self::InstanceHasMalformedPublicIP(err)
     }

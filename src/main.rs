@@ -16,7 +16,8 @@ mod ip;
 async fn main() {
     setup_logger(LevelFilter::Debug).unwrap();
     // let _my_external_ip = ip::guess().await.unwrap_or_else(|_| exit(1));
-    let config = Config::from_args();
+    let config = Config::from_args().unwrap();
+    println!("{:#?}", config);
 
     match work(config).await {
         Ok(()) => info!("Done!"),
