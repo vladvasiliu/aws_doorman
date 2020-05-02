@@ -2,7 +2,6 @@ use std::error::Error;
 use std::net::AddrParseError;
 use std::{fmt, fmt::Formatter};
 
-use rusoto_core::credential::CredentialsError;
 use rusoto_core::request::BufferedHttpResponse;
 use rusoto_core::RusotoError;
 use rusoto_ec2::{
@@ -17,7 +16,7 @@ pub enum InstanceError {
     MalformedPublicIP(AddrParseError),
     SecurityGroupNotAttached,
     IncorrectState(String),
-    UnknownError(RusotoError<DescribeInstancesError>),
+    UnknownError(DescribeInstancesError),
 }
 
 impl Error for InstanceError {}
@@ -45,10 +44,18 @@ impl From<CardinalityError> for InstanceError {
     }
 }
 
+impl From<DescribeInstancesError> for InstanceError {
+    fn from(err: DescribeInstancesError) -> Self {
+        Self::UnknownError(err)
+    }
+}
+
 #[derive(Debug)]
 pub enum SecurityGroupError {
     ReturnedTooMany,
     ReturnedNone,
+    DescribeError(DescribeSecurityGroupsError),
+    AuthorizeIngressError(AuthorizeSecurityGroupIngressError),
     UnknownError(Box<dyn Error>),
 }
 
@@ -56,7 +63,13 @@ impl Error for SecurityGroupError {}
 
 impl fmt::Display for SecurityGroupError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        unimplemented!()
+        match self {
+            Self::ReturnedNone => write!(f, "no instances returned"),
+            Self::ReturnedTooMany => write!(f, "too many instances returned"),
+            Self::DescribeError(err) => write!(f, "failed to get security group: {}", err),
+            Self::AuthorizeIngressError(err) => write!(f, "failed to authorize ip: {}", err),
+            Self::UnknownError(err) => write!(f, "{}", err),
+        }
     }
 }
 
@@ -69,10 +82,21 @@ impl From<CardinalityError> for SecurityGroupError {
     }
 }
 
+impl From<DescribeSecurityGroupsError> for SecurityGroupError {
+    fn from(err: DescribeSecurityGroupsError) -> Self {
+        Self::DescribeError(err)
+    }
+}
+
+impl From<AuthorizeSecurityGroupIngressError> for SecurityGroupError {
+    fn from(err: AuthorizeSecurityGroupIngressError) -> Self {
+        Self::AuthorizeIngressError(err)
+    }
+}
+
 #[derive(Debug)]
 pub enum AWSClientError<E> {
     Service(E),
-    CredentialsError(CredentialsError),
     RequestError(HttpResponseDescription),
     Unknown(Box<dyn Error>),
 }
@@ -83,39 +107,18 @@ impl<E: Error + 'static> fmt::Display for AWSClientError<E> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Service(err) => write!(f, "{}", err),
-            Self::CredentialsError(err) => write!(f, "Credentials error: {}", err),
             Self::RequestError(err) => write!(f, "{}", err),
-            Self::Unknown(err) => write!(f, "Unknwon error: {}", err),
+            Self::Unknown(err) => write!(f, "{}", err),
         }
     }
 }
 
-impl From<RusotoError<DescribeInstancesError>> for AWSClientError<InstanceError> {
-    fn from(err: RusotoError<DescribeInstancesError>) -> Self {
+impl<E: Error + 'static, F: std::convert::From<E>> From<RusotoError<E>> for AWSClientError<F> {
+    fn from(err: RusotoError<E>) -> Self {
         match err {
             RusotoError::Unknown(http_resp) => Self::RequestError(http_resp.into()),
-            RusotoError::Credentials(err) => Self::CredentialsError(err),
-            _ => Self::Service(InstanceError::UnknownError(err)),
-        }
-    }
-}
-
-impl From<RusotoError<DescribeSecurityGroupsError>> for AWSClientError<SecurityGroupError> {
-    fn from(err: RusotoError<DescribeSecurityGroupsError>) -> Self {
-        match err {
-            RusotoError::Unknown(http_resp) => Self::RequestError(http_resp.into()),
-            RusotoError::Credentials(err) => Self::CredentialsError(err),
-            _ => Self::Service(SecurityGroupError::UnknownError(err.into())),
-        }
-    }
-}
-
-impl From<RusotoError<AuthorizeSecurityGroupIngressError>> for AWSClientError<SecurityGroupError> {
-    fn from(err: RusotoError<AuthorizeSecurityGroupIngressError>) -> Self {
-        match err {
-            RusotoError::Unknown(http_resp) => Self::RequestError(http_resp.into()),
-            RusotoError::Credentials(err) => Self::CredentialsError(err),
-            _ => Self::Service(SecurityGroupError::UnknownError(err.into())),
+            RusotoError::Service(err) => Self::Service(err.into()),
+            _ => Self::Unknown(err.into()),
         }
     }
 }

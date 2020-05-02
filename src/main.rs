@@ -24,6 +24,7 @@ async fn main() {
         Ok(()) => info!("Done!"),
         Err(err) => {
             debug!("{:#?}", err);
+            error!("{}", err);
             exit(1)
         }
     }
@@ -42,13 +43,7 @@ async fn work(config: Config, external_ip: IpAddr) -> Result<(), Box<dyn Error>>
     //     error!("Failed to retrieve instance IP: {}", err);
     //     Err(err)
     // })?;
-    aws_client
-        .add_ip_to_security_group(external_ip)
-        .await
-        .or_else(|err| {
-            error!("Failed to update security group: {}", err);
-            Err(err)
-        })?;
+    aws_client.add_ip_to_security_group(external_ip).await?;
     Ok(())
 }
 
