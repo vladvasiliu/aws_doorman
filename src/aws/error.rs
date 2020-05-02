@@ -5,52 +5,73 @@ use std::{fmt, fmt::Formatter};
 use rusoto_core::credential::CredentialsError;
 use rusoto_core::request::BufferedHttpResponse;
 use rusoto_core::RusotoError;
-use rusoto_ec2::DescribeInstancesError;
+use rusoto_ec2::{DescribeInstancesError, DescribeSecurityGroupsError};
+
+#[derive(Debug)]
+pub enum InstanceError {
+    ReturnedNone,
+    ReturnedTooMany,
+    NoPublicIP,
+    MalformedPublicIP(AddrParseError),
+    SecurityGroupNotAttached,
+    IncorrectState(String),
+    UnknownError(RusotoError<DescribeInstancesError>),
+}
+
+impl Error for InstanceError {}
+
+impl fmt::Display for InstanceError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ReturnedNone => write!(f, "no instances returned"),
+            Self::ReturnedTooMany => write!(f, "too many instances returned"),
+            Self::NoPublicIP => write!(f, "no public ip"),
+            Self::MalformedPublicIP(err) => write!(f, "malformed public IP: {}", err),
+            Self::SecurityGroupNotAttached => write!(f, "requested security group is not attached"),
+            Self::IncorrectState(err) => write!(f, "incorrect state: {}", err),
+            Self::UnknownError(err) => write!(f, "unknown error: {}", err),
+        }
+    }
+}
+
+impl From<CardinalityError> for InstanceError {
+    fn from(err: CardinalityError) -> Self {
+        match err {
+            CardinalityError::TooMany => Self::ReturnedTooMany,
+            CardinalityError::None => Self::ReturnedNone,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum SecurityGroupError {}
+
+impl Error for SecurityGroupError {}
+
+impl fmt::Display for SecurityGroupError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        unimplemented!()
+    }
+}
 
 #[derive(Debug)]
 pub enum AWSClientError {
+    Instance(InstanceError),
+    SecurityGroup(SecurityGroupError),
     CredentialsError(CredentialsError),
-    DescribeInstancesPermissionDenied(HttpResponseDescription),
-    DescribeInstancesBadRequest(HttpResponseDescription),
-    DescribeInstancesUnknownError(RusotoError<DescribeInstancesError>),
-    DescribeInstancesReturnedNone,
-    DescribeInstancesReturnedTooMany,
-    InstanceHasNoPublicIP,
-    InstanceHasMalformedPublicIP(AddrParseError),
-    InstanceHasIncorrectState(String),
-    SecurityGroupNotAttached,
+    PermissionDenied(HttpResponseDescription),
+    BadRequest(HttpResponseDescription),
+    Unknown(Box<dyn Error>),
 }
 
 impl Error for AWSClientError {}
 
 impl fmt::Display for AWSClientError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut msg = String::from("Failed to get instance information: ");
         match self {
-            Self::DescribeInstancesPermissionDenied(err)
-            | Self::DescribeInstancesBadRequest(err) => {
-                msg.push_str(&format!("{}", err));
-            }
-            Self::DescribeInstancesReturnedNone => msg.push_str("no instances returned"),
-            Self::DescribeInstancesReturnedTooMany => msg.push_str("too many instances returned"),
-            Self::DescribeInstancesUnknownError(err) => {
-                msg.push_str(&format!("Unknown error occurred. Cause: {:#?}", err));
-            }
-            Self::InstanceHasNoPublicIP => msg.push_str("Instance has no public IP"),
-            Self::InstanceHasMalformedPublicIP(err) => {
-                msg.push_str(&format!("Public IP is malformed: {}", err))
-            }
-            Self::InstanceHasIncorrectState(err) => {
-                msg.push_str(&format!("Incorrect state: {}", err))
-            }
-            Self::SecurityGroupNotAttached => {
-                msg.push_str("The requested security group is not attached")
-            }
-            Self::CredentialsError(err) => {
-                msg.push_str(&format!("Credentials error: {}", err));
-            }
+            Self::Instance(err) => write!(f, "{}", err),
+            _ => write!(f, "unknwn"),
         }
-        write!(f, "{}", msg)
     }
 }
 
@@ -58,20 +79,26 @@ impl From<RusotoError<DescribeInstancesError>> for AWSClientError {
     fn from(err: RusotoError<DescribeInstancesError>) -> Self {
         match err {
             RusotoError::Unknown(http_resp) if http_resp.status == 400 => {
-                Self::DescribeInstancesBadRequest(http_resp.into())
+                Self::BadRequest(http_resp.into())
             }
             RusotoError::Unknown(http_resp) if http_resp.status == 403 => {
-                Self::DescribeInstancesPermissionDenied(http_resp.into())
+                Self::PermissionDenied(http_resp.into())
             }
             RusotoError::Credentials(err) => Self::CredentialsError(err),
-            _ => Self::DescribeInstancesUnknownError(err),
+            _ => Self::Instance(InstanceError::UnknownError(err)),
         }
     }
 }
 
-impl From<AddrParseError> for AWSClientError {
+impl From<InstanceError> for AWSClientError {
+    fn from(err: InstanceError) -> Self {
+        Self::Instance(err)
+    }
+}
+
+impl From<AddrParseError> for InstanceError {
     fn from(err: AddrParseError) -> Self {
-        Self::InstanceHasMalformedPublicIP(err)
+        Self::MalformedPublicIP(err)
     }
 }
 
@@ -130,6 +157,23 @@ impl From<BufferedHttpResponse> for HttpResponseDescription {
             status: hrd.status.as_u16(),
             errors: hre_vec,
             source: hrd,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum CardinalityError {
+    None,
+    TooMany,
+}
+
+impl Error for CardinalityError {}
+
+impl fmt::Display for CardinalityError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::None => write!(f, "None found"),
+            Self::TooMany => write!(f, "Too many"),
         }
     }
 }

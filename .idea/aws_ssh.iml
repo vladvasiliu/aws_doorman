@@ -58,6 +58,9 @@
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/proc-macro-error-attr-e63385fdefedc511/out" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/c-ares-sys-2092b3b71b75af18/out" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/byteorder-10ece68e28f65c6a/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/syn-71c15912b139f20a/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/time-1329cc98a340f7e1/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/standback-8335c5eb08a63931/out" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

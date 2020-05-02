@@ -36,6 +36,7 @@ async fn work(config: Config) -> Result<(), Box<dyn Error>> {
         sg_id: config.sg_id,
     };
     let _instance_ip = aws_client.get_instance_ip().await?;
+    // aws_client.get_security_group().await?;
     Ok(())
 }
 
