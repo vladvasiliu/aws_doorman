@@ -4,7 +4,7 @@ use rusoto_ec2::{
     DescribeInstancesRequest, DescribeSecurityGroupsRequest, Ec2, Ec2Client, Instance, Reservation,
 };
 
-use crate::aws::error::{AWSClientError, InstanceError, SecurityGroupError};
+use crate::aws::error::{AWSClientError, CardinalityError, InstanceError, SecurityGroupError};
 use crate::aws::helpers::{get_only_item, get_public_ip, has_security_group, is_running};
 
 mod error;
@@ -23,7 +23,9 @@ impl AWSClient {
         Ok(true)
     }
 
-    async fn get_reservations(&self) -> Result<Option<Vec<Reservation>>, AWSClientError> {
+    async fn get_reservations(
+        &self,
+    ) -> Result<Option<Vec<Reservation>>, AWSClientError<InstanceError>> {
         let di_res = self
             .ec2_client
             .describe_instances(DescribeInstancesRequest {
@@ -48,25 +50,24 @@ impl AWSClient {
         Ok(public_ip)
     }
 
-    pub async fn get_instance_ip(&self) -> Result<IpAddr, AWSClientError> {
+    pub async fn get_instance_ip(&self) -> Result<IpAddr, AWSClientError<InstanceError>> {
         let reservations = self.get_reservations().await?;
         let ip = self.get_ip_from_reservations(reservations)?;
         println!("IP: {}", ip);
         Ok(ip)
     }
 
-    //
-    // pub async fn get_security_group(&self) -> Result<(), AWSClientError> {
-    //     let dg_res = self
-    //         .ec2_client
-    //         .describe_security_groups(DescribeSecurityGroupsRequest {
-    //             group_ids: Some(vec![self.sg_id.clone()]),
-    //             ..Default::default()
-    //         })
-    //         .await?;
-    //
-    //     let sg = get_only_item(&dg_res.security_groups)?;
-    //     println!("{:#?}", sg);
-    //     Ok(())
-    // }
+    pub async fn get_security_group(&self) -> Result<(), AWSClientError<SecurityGroupError>> {
+        let dg_res = self
+            .ec2_client
+            .describe_security_groups(DescribeSecurityGroupsRequest {
+                group_ids: Some(vec![self.sg_id.clone()]),
+                ..Default::default()
+            })
+            .await?;
+
+        let sg = get_only_item(&dg_res.security_groups).map_err(SecurityGroupError::from)?;
+        println!("{:#?}", sg);
+        Ok(())
+    }
 }

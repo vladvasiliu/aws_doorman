@@ -2,6 +2,7 @@ use std::error::Error;
 use std::net::AddrParseError;
 use std::{fmt, fmt::Formatter};
 
+use crate::aws::error::InstanceError::SecurityGroupNotAttached;
 use rusoto_core::credential::CredentialsError;
 use rusoto_core::request::BufferedHttpResponse;
 use rusoto_core::RusotoError;
@@ -44,7 +45,11 @@ impl From<CardinalityError> for InstanceError {
 }
 
 #[derive(Debug)]
-pub enum SecurityGroupError {}
+pub enum SecurityGroupError {
+    ReturnedTooMany,
+    ReturnedNone,
+    UnknownError(RusotoError<DescribeSecurityGroupsError>),
+}
 
 impl Error for SecurityGroupError {}
 
@@ -54,28 +59,39 @@ impl fmt::Display for SecurityGroupError {
     }
 }
 
+impl From<CardinalityError> for SecurityGroupError {
+    fn from(err: CardinalityError) -> Self {
+        match err {
+            CardinalityError::TooMany => Self::ReturnedTooMany,
+            CardinalityError::None => Self::ReturnedNone,
+        }
+    }
+}
+
 #[derive(Debug)]
-pub enum AWSClientError {
-    Instance(InstanceError),
-    SecurityGroup(SecurityGroupError),
+pub enum AWSClientError<E> {
+    Service(E),
     CredentialsError(CredentialsError),
     PermissionDenied(HttpResponseDescription),
     BadRequest(HttpResponseDescription),
     Unknown(Box<dyn Error>),
 }
 
-impl Error for AWSClientError {}
+impl<E: Error + 'static> Error for AWSClientError<E> {}
 
-impl fmt::Display for AWSClientError {
+impl<E: Error + 'static> fmt::Display for AWSClientError<E> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Instance(err) => write!(f, "{}", err),
-            _ => write!(f, "unknwn"),
+            Self::Service(err) => write!(f, "{}", err),
+            Self::CredentialsError(err) => write!(f, "Credentials error: {}", err),
+            Self::PermissionDenied(err) => write!(f, "{}", err),
+            Self::BadRequest(err) => write!(f, "Bad request: {}", err),
+            Self::Unknown(err) => write!(f, "Unknwon error: {}", err),
         }
     }
 }
 
-impl From<RusotoError<DescribeInstancesError>> for AWSClientError {
+impl From<RusotoError<DescribeInstancesError>> for AWSClientError<InstanceError> {
     fn from(err: RusotoError<DescribeInstancesError>) -> Self {
         match err {
             RusotoError::Unknown(http_resp) if http_resp.status == 400 => {
@@ -85,14 +101,35 @@ impl From<RusotoError<DescribeInstancesError>> for AWSClientError {
                 Self::PermissionDenied(http_resp.into())
             }
             RusotoError::Credentials(err) => Self::CredentialsError(err),
-            _ => Self::Instance(InstanceError::UnknownError(err)),
+            _ => Self::Service(InstanceError::UnknownError(err)),
         }
     }
 }
 
-impl From<InstanceError> for AWSClientError {
+impl From<RusotoError<DescribeSecurityGroupsError>> for AWSClientError<SecurityGroupError> {
+    fn from(err: RusotoError<DescribeSecurityGroupsError>) -> Self {
+        match err {
+            RusotoError::Unknown(http_resp) if http_resp.status == 400 => {
+                Self::BadRequest(http_resp.into())
+            }
+            RusotoError::Unknown(http_resp) if http_resp.status == 403 => {
+                Self::PermissionDenied(http_resp.into())
+            }
+            RusotoError::Credentials(err) => Self::CredentialsError(err),
+            _ => Self::Service(SecurityGroupError::UnknownError(err)),
+        }
+    }
+}
+
+impl From<InstanceError> for AWSClientError<InstanceError> {
     fn from(err: InstanceError) -> Self {
-        Self::Instance(err)
+        Self::Service(err)
+    }
+}
+
+impl From<SecurityGroupError> for AWSClientError<SecurityGroupError> {
+    fn from(err: SecurityGroupError) -> Self {
+        Self::Service(err)
     }
 }
 

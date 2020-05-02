@@ -1,6 +1,6 @@
 use std::process::exit;
 
-use log::{error, info, LevelFilter};
+use log::{debug, error, info, LevelFilter};
 use rusoto_core::Region;
 use rusoto_ec2::Ec2Client;
 
@@ -17,12 +17,11 @@ async fn main() {
     setup_logger(LevelFilter::Debug).unwrap();
     // let _my_external_ip = ip::guess().await.unwrap_or_else(|_| exit(1));
     let config = Config::from_args().unwrap();
-    println!("{:#?}", config);
 
     match work(config).await {
         Ok(()) => info!("Done!"),
         Err(err) => {
-            error!("{}", err);
+            debug!("{:#?}", err);
             exit(1)
         }
     }
@@ -35,8 +34,14 @@ async fn work(config: Config) -> Result<(), Box<dyn Error>> {
         instance_id: config.instance_id,
         sg_id: config.sg_id,
     };
-    let _instance_ip = aws_client.get_instance_ip().await?;
-    // aws_client.get_security_group().await?;
+    // let _instance_ip = aws_client.get_instance_ip().await.or_else(|err| {
+    //     error!("Failed to retrieve instance IP: {}", err);
+    //     Err(err)
+    // })?;
+    aws_client.get_security_group().await.or_else(|err| {
+        error!("Failed to retrieve security group: {}", err);
+        Err(err)
+    })?;
     Ok(())
 }
 
