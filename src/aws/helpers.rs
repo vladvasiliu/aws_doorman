@@ -1,6 +1,6 @@
 use rusoto_ec2::{Instance, InstanceState};
 
-use crate::aws::error::{AWSClientError, CardinalityError, InstanceError};
+use crate::aws::error::{CardinalityError, InstanceError};
 use std::net::IpAddr;
 
 pub fn is_running(instance: &Instance) -> Result<bool, InstanceError> {

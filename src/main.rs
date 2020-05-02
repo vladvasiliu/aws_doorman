@@ -7,6 +7,7 @@ use rusoto_ec2::Ec2Client;
 use crate::aws::AWSClient;
 use crate::config::Config;
 use std::error::Error;
+use std::net::IpAddr;
 
 mod aws;
 mod config;
@@ -15,10 +16,11 @@ mod ip;
 #[tokio::main]
 async fn main() {
     setup_logger(LevelFilter::Debug).unwrap();
-    // let _my_external_ip = ip::guess().await.unwrap_or_else(|_| exit(1));
+    // let my_external_ip = ip::guess().await.unwrap_or_else(|_| exit(1));
+    let my_external_ip = IpAddr::from([1, 2, 3, 4]);
     let config = Config::from_args().unwrap();
 
-    match work(config).await {
+    match work(config, my_external_ip).await {
         Ok(()) => info!("Done!"),
         Err(err) => {
             debug!("{:#?}", err);
@@ -27,21 +29,26 @@ async fn main() {
     }
 }
 
-async fn work(config: Config) -> Result<(), Box<dyn Error>> {
+async fn work(config: Config, external_ip: IpAddr) -> Result<(), Box<dyn Error>> {
     let ec2_client = Ec2Client::new(Region::EuWest3);
     let aws_client = AWSClient {
         ec2_client,
         instance_id: config.instance_id,
         sg_id: config.sg_id,
+        from_port: 9999,
+        to_port: 10000,
     };
     // let _instance_ip = aws_client.get_instance_ip().await.or_else(|err| {
     //     error!("Failed to retrieve instance IP: {}", err);
     //     Err(err)
     // })?;
-    aws_client.get_security_group().await.or_else(|err| {
-        error!("Failed to retrieve security group: {}", err);
-        Err(err)
-    })?;
+    aws_client
+        .add_ip_to_security_group(external_ip)
+        .await
+        .or_else(|err| {
+            error!("Failed to update security group: {}", err);
+            Err(err)
+        })?;
     Ok(())
 }
 
