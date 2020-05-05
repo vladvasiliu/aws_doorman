@@ -38,6 +38,7 @@ async fn work(config: Config, external_ip: IpAddr) -> Result<(), Box<dyn Error>>
         sg_id: config.sg_id,
         from_port: 9999,
         to_port: 10000,
+        sg_rule_id: String::from("test sg rule id"),
     };
     // let _instance_ip = aws_client.get_instance_ip().await.or_else(|err| {
     //     error!("Failed to retrieve instance IP: {}", err);

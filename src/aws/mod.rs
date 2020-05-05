@@ -18,6 +18,7 @@ pub struct AWSClient {
     pub sg_id: String,
     pub from_port: i64,
     pub to_port: i64,
+    pub sg_rule_id: String,
 }
 
 impl AWSClient {
@@ -75,10 +76,7 @@ impl AWSClient {
         Ok(dsg_res.security_groups)
     }
 
-    async fn authorize_sg_ingress(
-        &self,
-        sg: &SecurityGroup,
-    ) -> Result<(), AWSClientError<SecurityGroupError>> {
+    async fn authorize_sg_ingress(&self) -> Result<(), AWSClientError<SecurityGroupError>> {
         let request = AuthorizeSecurityGroupIngressRequest {
             ip_permissions: self.get_ip_permissions(),
             group_id: Some(self.sg_id.to_string()),
@@ -100,14 +98,14 @@ impl AWSClient {
             Err(err)
         })?;
         let sg = get_only_item(&sg_vec).map_err(SecurityGroupError::from)?;
-        self.authorize_sg_ingress(sg).await?;
+        self.authorize_sg_ingress().await?;
         Ok(())
     }
 
     fn get_ip_permissions(&self) -> Option<Vec<IpPermission>> {
         let ip_range = IpRange {
             cidr_ip: Some("10.1.1.1/32".to_string()),
-            description: Some("test sg".to_string()),
+            description: Some("test sg2".to_string()),
         };
 
         let ip_perm = IpPermission {

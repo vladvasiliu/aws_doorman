@@ -16,7 +16,7 @@ pub enum InstanceError {
     MalformedPublicIP(AddrParseError),
     SecurityGroupNotAttached,
     IncorrectState(String),
-    UnknownError(DescribeInstancesError),
+    UnknownError(RusotoError<DescribeInstancesError>),
 }
 
 impl Error for InstanceError {}
@@ -44,9 +44,60 @@ impl From<CardinalityError> for InstanceError {
     }
 }
 
-impl From<DescribeInstancesError> for InstanceError {
-    fn from(err: DescribeInstancesError) -> Self {
+impl From<RusotoError<DescribeInstancesError>> for InstanceError {
+    fn from(err: RusotoError<DescribeInstancesError>) -> Self {
         Self::UnknownError(err)
+    }
+}
+
+#[derive(Debug)]
+pub enum SGAuthorizeIngressError {
+    DuplicateRule(HttpResponseDescription),
+    UnknownHttpError(HttpResponseDescription),
+    Unknown(RusotoError<AuthorizeSecurityGroupIngressError>),
+}
+
+impl Error for SGAuthorizeIngressError {}
+
+impl fmt::Display for SGAuthorizeIngressError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::DuplicateRule(err) => write!(f, "{}", err),
+            Self::UnknownHttpError(err) => write!(f, "{}", err),
+            Self::Unknown(err) => write!(f, "Unknown error: {}", err),
+        }
+    }
+}
+
+impl From<RusotoError<AuthorizeSecurityGroupIngressError>> for SGAuthorizeIngressError {
+    fn from(err: RusotoError<AuthorizeSecurityGroupIngressError>) -> Self {
+        match err {
+            RusotoError::Unknown(http_response) => {
+                Self::from(HttpResponseDescription::from(http_response))
+            }
+            _ => Self::Unknown(err),
+        }
+    }
+}
+
+impl From<HttpResponseDescription> for SGAuthorizeIngressError {
+    fn from(err: HttpResponseDescription) -> Self {
+        // If status is 403, it should be handled by a more generic error
+        // If status is other than 400, we don't know what it is
+        if err.status == 400 {
+            // If there is no error, we can't do anything
+            // There shouldn't be several errors
+            // wf there are, the first one is probably the one we want
+            return match err.errors.first() {
+                Some(error_detail)
+                    if error_detail.code == Some(String::from("InvalidPermission.Duplicate")) =>
+                {
+                    Self::DuplicateRule(err)
+                }
+                _ => Self::UnknownHttpError(err),
+            };
+        }
+        Self::UnknownHttpError(err)
     }
 }
 
@@ -54,8 +105,8 @@ impl From<DescribeInstancesError> for InstanceError {
 pub enum SecurityGroupError {
     ReturnedTooMany,
     ReturnedNone,
-    DescribeError(DescribeSecurityGroupsError),
-    AuthorizeIngressError(AuthorizeSecurityGroupIngressError),
+    DescribeError(HttpResponseDescription),
+    AuthorizeIngressError(SGAuthorizeIngressError),
     UnknownError(Box<dyn Error>),
 }
 
@@ -82,22 +133,22 @@ impl From<CardinalityError> for SecurityGroupError {
     }
 }
 
-impl From<DescribeSecurityGroupsError> for SecurityGroupError {
-    fn from(err: DescribeSecurityGroupsError) -> Self {
-        Self::DescribeError(err)
+impl From<RusotoError<DescribeSecurityGroupsError>> for SecurityGroupError {
+    fn from(err: RusotoError<DescribeSecurityGroupsError>) -> Self {
+        Self::UnknownError(err.into())
     }
 }
 
-impl From<AuthorizeSecurityGroupIngressError> for SecurityGroupError {
-    fn from(err: AuthorizeSecurityGroupIngressError) -> Self {
-        Self::AuthorizeIngressError(err)
+impl From<RusotoError<AuthorizeSecurityGroupIngressError>> for SecurityGroupError {
+    fn from(err: RusotoError<AuthorizeSecurityGroupIngressError>) -> Self {
+        Self::AuthorizeIngressError(err.into())
     }
 }
 
 #[derive(Debug)]
 pub enum AWSClientError<E> {
     Service(E),
-    RequestError(HttpResponseDescription),
+    PermissionDenied(HttpResponseDescription),
     Unknown(Box<dyn Error>),
 }
 
@@ -107,17 +158,21 @@ impl<E: Error + 'static> fmt::Display for AWSClientError<E> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Service(err) => write!(f, "{}", err),
-            Self::RequestError(err) => write!(f, "{}", err),
+            Self::PermissionDenied(err) => write!(f, "{}", err),
             Self::Unknown(err) => write!(f, "{}", err),
         }
     }
 }
 
-impl<E: Error + 'static, F: std::convert::From<E>> From<RusotoError<E>> for AWSClientError<F> {
+impl<E: Error + 'static, F: std::convert::From<RusotoError<E>>> From<RusotoError<E>>
+    for AWSClientError<F>
+{
     fn from(err: RusotoError<E>) -> Self {
         match err {
-            RusotoError::Unknown(http_resp) => Self::RequestError(http_resp.into()),
-            RusotoError::Service(err) => Self::Service(err.into()),
+            RusotoError::Unknown(http_resp) if http_resp.status == 403 => {
+                Self::PermissionDenied(http_resp.into())
+            }
+            RusotoError::Unknown(_) | RusotoError::Service(_) => Self::Service(err.into()),
             _ => Self::Unknown(err.into()),
         }
     }
