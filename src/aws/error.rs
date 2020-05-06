@@ -106,12 +106,6 @@ impl From<HttpResponseDescription> for SGAuthorizeIngressError {
             Some("RulesPerSecurityGroupLimitExceeded") => return Self::RuleLimitExceeded(err),
             _ => Self::UnknownHttpError(err),
         }
-
-        // if error_detail.code == Some(String::from("InvalidSecurityGroupID.NotFound")) {
-        //     return Self::GroupNotFound(err);
-        // }
-
-        // Self::UnknownHttpError(err)
     }
 }
 
@@ -287,3 +281,5 @@ impl fmt::Display for CardinalityError {
         }
     }
 }
+
+pub type SGClientResult<T> = Result<T, AWSClientError<SecurityGroupError>>;

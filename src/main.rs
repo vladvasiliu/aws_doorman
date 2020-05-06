@@ -4,7 +4,7 @@ use log::{debug, error, info, LevelFilter};
 use rusoto_core::Region;
 use rusoto_ec2::Ec2Client;
 
-use crate::aws::AWSClient;
+use crate::aws::{AWSClient, IPRule};
 use crate::config::Config;
 use std::error::Error;
 use std::net::IpAddr;
@@ -31,20 +31,27 @@ async fn main() {
 }
 
 async fn work(config: Config, external_ip: IpAddr) -> Result<(), Box<dyn Error>> {
+    let ip_rule = IPRule {
+        id: String::from("test sg rule ids"),
+        ip: external_ip,
+        from_port: 9999,
+        to_port: 10000,
+    };
     let ec2_client = Ec2Client::new(Region::EuWest3);
     let aws_client = AWSClient {
         ec2_client,
         instance_id: config.instance_id,
         sg_id: config.sg_id,
-        from_port: 9999,
-        to_port: 10000,
-        sg_rule_id: String::from("test sg rule id"),
+        rule: ip_rule,
     };
     // let _instance_ip = aws_client.get_instance_ip().await.or_else(|err| {
     //     error!("Failed to retrieve instance IP: {}", err);
     //     Err(err)
     // })?;
-    aws_client.add_ip_to_security_group(external_ip).await?;
+    // aws_client.add_ip_to_security_group().await?;
+    let res = aws_client.is_rule_in_sg().await?;
+    println!("{:#?}", res);
+
     Ok(())
 }
 

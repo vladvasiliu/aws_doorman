@@ -6,22 +6,33 @@ use rusoto_ec2::{
     Ec2, Ec2Client, Instance, IpPermission, IpRange, Reservation, SecurityGroup,
 };
 
-use crate::aws::error::{AWSClientError, InstanceError, SecurityGroupError};
+use crate::aws::error::{
+    AWSClientError, InstanceError, SGAuthorizeIngressError, SGClientResult, SecurityGroupError,
+};
 use crate::aws::helpers::{get_only_item, get_public_ip, has_security_group, is_running};
 
 mod error;
 mod helpers;
 
+#[derive(Debug)]
+pub struct IPRule {
+    pub id: String,
+    pub ip: IpAddr,
+    pub from_port: i64,
+    pub to_port: i64,
+}
+
 pub struct AWSClient {
     pub ec2_client: Ec2Client,
     pub instance_id: String,
     pub sg_id: String,
-    pub from_port: i64,
-    pub to_port: i64,
-    pub sg_rule_id: String,
+    pub rule: IPRule,
 }
 
 impl AWSClient {
+    //
+    // Instance related
+    //
     pub fn is_instance_sane(&self, instance: &Instance) -> Result<bool, InstanceError> {
         is_running(instance)?;
         has_security_group(instance, &self.sg_id)?;
@@ -62,21 +73,52 @@ impl AWSClient {
         Ok(ip)
     }
 
-    async fn get_security_groups(
-        &self,
-    ) -> Result<Option<Vec<SecurityGroup>>, AWSClientError<SecurityGroupError>> {
+    //
+    // Security Group related
+    //
+
+    pub async fn get_security_groups(&self) -> SGClientResult<Option<Vec<SecurityGroup>>> {
         let dsg_res = self
             .ec2_client
             .describe_security_groups(DescribeSecurityGroupsRequest {
                 group_ids: Some(vec![self.sg_id.clone()]),
                 ..Default::default()
             })
-            .await?;
+            .await
+            .or_else(|err| {
+                error!("Failed to retrieve security group: {}", err);
+                Err(err)
+            })?;
 
         Ok(dsg_res.security_groups)
     }
 
-    async fn authorize_sg_ingress(&self) -> Result<(), AWSClientError<SecurityGroupError>> {
+    pub async fn is_rule_in_sg(&self) -> SGClientResult<bool> {
+        let sg_res = self.get_security_groups().await?;
+        let sg = get_only_item(&sg_res).map_err(SecurityGroupError::from)?;
+
+        let ip_permissions = match &sg.ip_permissions {
+            Some(perm_vec) => perm_vec,
+            _ => return Ok(false),
+        };
+
+        for ip_permission in ip_permissions {
+            let ip_ranges = match &ip_permission.ip_ranges {
+                Some(range_vec) => range_vec,
+                _ => continue,
+            };
+
+            for range in ip_ranges {
+                if range.description.as_ref() == Some(&self.rule.id) {
+                    return Ok(true);
+                }
+            }
+        }
+
+        Ok(false)
+    }
+
+    async fn authorize_sg_ingress(&self) -> SGClientResult<()> {
         let request = AuthorizeSecurityGroupIngressRequest {
             ip_permissions: self.get_ip_permissions(),
             group_id: Some(self.sg_id.to_string()),
@@ -86,19 +128,6 @@ impl AWSClient {
         self.ec2_client
             .authorize_security_group_ingress(request)
             .await?;
-        Ok(())
-    }
-
-    pub async fn add_ip_to_security_group(
-        &self,
-        ip: IpAddr,
-    ) -> Result<(), AWSClientError<SecurityGroupError>> {
-        let sg_vec = self.get_security_groups().await.or_else(|err| {
-            error!("Failed to retrieve security group: {}", err);
-            Err(err)
-        })?;
-        let sg = get_only_item(&sg_vec).map_err(SecurityGroupError::from)?;
-        self.authorize_sg_ingress().await?;
         Ok(())
     }
 
