@@ -32,7 +32,7 @@ async fn main() {
 
 async fn work(config: Config, external_ip: IpAddr) -> Result<(), Box<dyn Error>> {
     let ip_rule = IPRule {
-        id: String::from("test sg rule ids"),
+        id: String::from("test sg rule id"),
         ip: external_ip,
         from_port: 9999,
         to_port: 10000,

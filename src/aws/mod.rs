@@ -93,29 +93,20 @@ impl AWSClient {
         Ok(dsg_res.security_groups)
     }
 
-    pub async fn is_rule_in_sg(&self) -> SGClientResult<bool> {
+    pub async fn is_rule_in_sg(&self) -> SGClientResult<usize> {
         let sg_res = self.get_security_groups().await?;
         let sg = get_only_item(&sg_res).map_err(SecurityGroupError::from)?;
 
-        let ip_permissions = match &sg.ip_permissions {
-            Some(perm_vec) => perm_vec,
-            _ => return Ok(false),
-        };
-
-        for ip_permission in ip_permissions {
-            let ip_ranges = match &ip_permission.ip_ranges {
-                Some(range_vec) => range_vec,
-                _ => continue,
-            };
-
-            for range in ip_ranges {
-                if range.description.as_ref() == Some(&self.rule.id) {
-                    return Ok(true);
-                }
-            }
-        }
-
-        Ok(false)
+        let result = sg.ip_permissions.as_ref().map_or_else(Vec::new, |ip_permission_vec| {
+            ip_permission_vec.iter().map(|ip_permission| {
+                ip_permission.ip_ranges.as_ref().map_or_else(Vec::new, |ip_range_vec| {
+                    ip_range_vec.iter().map(|ip_range| {
+                        ip_range.description.as_ref() == Some(&self.rule.id)
+                    }).filter(|x| *x).collect()
+                })
+            }).flatten().collect()
+        });
+        Ok(result.len())
     }
 
     async fn authorize_sg_ingress(&self) -> SGClientResult<()> {
