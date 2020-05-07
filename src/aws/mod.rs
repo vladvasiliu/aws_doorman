@@ -98,13 +98,13 @@ impl AWSClient {
         let sg = get_only_item(&sg_res).map_err(SecurityGroupError::from)?;
 
         let result = sg.ip_permissions.as_ref().map_or_else(Vec::new, |ip_permission_vec| {
-            ip_permission_vec.iter().map(|ip_permission| {
+            ip_permission_vec.iter().flat_map(|ip_permission| {
                 ip_permission.ip_ranges.as_ref().map_or_else(Vec::new, |ip_range_vec| {
                     ip_range_vec.iter().filter(|ip_range| {
                         ip_range.description.as_ref() == Some(&self.rule.id)
                     }).collect()
                 })
-            }).flatten().collect()
+            }).collect()
         });
 
         Ok(result.len())
