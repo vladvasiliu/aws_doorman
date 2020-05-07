@@ -4,7 +4,7 @@ use log::{debug, error, info, LevelFilter};
 use rusoto_core::Region;
 use rusoto_ec2::Ec2Client;
 
-use crate::aws::{AWSClient, IPRule};
+use crate::aws::{AWSClient, IPRule, helpers::get_only_item};
 use crate::config::Config;
 use std::error::Error;
 use std::net::IpAddr;
@@ -17,7 +17,7 @@ mod ip;
 async fn main() {
     setup_logger(LevelFilter::Debug).unwrap();
     // let my_external_ip = ip::guess().await.unwrap_or_else(|_| exit(1));
-    let my_external_ip = IpAddr::from([1, 2, 3, 4]);
+    let my_external_ip = IpAddr::from([192, 168, 1, 1]);
     let config = Config::from_args().unwrap();
 
     match work(config, my_external_ip).await {
@@ -36,6 +36,7 @@ async fn work(config: Config, external_ip: IpAddr) -> Result<(), Box<dyn Error>>
         ip: external_ip,
         from_port: 9999,
         to_port: 10000,
+        ip_protocol: "tcp".to_string(),
     };
     let ec2_client = Ec2Client::new(Region::EuWest3);
     let aws_client = AWSClient {
@@ -49,7 +50,9 @@ async fn work(config: Config, external_ip: IpAddr) -> Result<(), Box<dyn Error>>
     //     Err(err)
     // })?;
     // aws_client.add_ip_to_security_group().await?;
-    let res = aws_client.is_rule_in_sg().await?;
+    let sg_res = aws_client.get_security_groups().await?;
+    let sg = get_only_item(&sg_res)?;
+    let res = aws_client.is_rule_in_sg(sg);
     println!("{:#?}", res);
 
     Ok(())

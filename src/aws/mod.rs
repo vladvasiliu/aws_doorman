@@ -12,7 +12,8 @@ use crate::aws::error::{
 use crate::aws::helpers::{get_only_item, get_public_ip, has_security_group, is_running};
 
 mod error;
-mod helpers;
+pub mod helpers;
+
 
 #[derive(Debug)]
 pub struct IPRule {
@@ -20,6 +21,19 @@ pub struct IPRule {
     pub ip: IpAddr,
     pub from_port: i64,
     pub to_port: i64,
+    pub ip_protocol: String,
+}
+
+impl PartialEq<IpPermission> for IPRule {
+    fn eq(&self, other: &IpPermission) -> bool {
+        Some(self.from_port) == other.from_port && Some(self.to_port) == other.to_port && Some(&self.ip_protocol) == other.ip_protocol.as_ref()
+    }
+}
+
+impl PartialEq<IPRule> for IpPermission {
+    fn eq(&self, other: &IPRule) -> bool {
+        self.from_port == Some(other.from_port) && self.to_port == Some(other.to_port) && self.ip_protocol.as_ref() == Some(&other.ip_protocol)
+    }
 }
 
 pub struct AWSClient {
@@ -93,21 +107,20 @@ impl AWSClient {
         Ok(dsg_res.security_groups)
     }
 
-    pub async fn is_rule_in_sg(&self) -> SGClientResult<usize> {
-        let sg_res = self.get_security_groups().await?;
-        let sg = get_only_item(&sg_res).map_err(SecurityGroupError::from)?;
-
-        let result = sg.ip_permissions.as_ref().map_or_else(Vec::new, |ip_permission_vec| {
-            ip_permission_vec.iter().flat_map(|ip_permission| {
+    pub fn is_rule_in_sg<'a>(&self, sg: &'a SecurityGroup) -> Vec<&'a str> {
+        sg.ip_permissions.as_ref().map_or_else(Vec::new, |ip_permission_vec| {
+            ip_permission_vec.iter().filter(|ip_permission|{self.rule == **ip_permission}).flat_map(|ip_permission| {
                 ip_permission.ip_ranges.as_ref().map_or_else(Vec::new, |ip_range_vec| {
-                    ip_range_vec.iter().filter(|ip_range| {
-                        ip_range.description.as_ref() == Some(&self.rule.id)
+                    ip_range_vec.iter().filter_map(|ip_range| {
+                        if ip_range.description.as_ref() == Some(&self.rule.id) {
+                            ip_range.cidr_ip.as_deref()
+                        } else {
+                            None
+                        }
                     }).collect()
                 })
             }).collect()
-        });
-
-        Ok(result.len())
+        })
     }
 
     async fn authorize_sg_ingress(&self) -> SGClientResult<()> {
