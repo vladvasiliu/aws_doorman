@@ -50,10 +50,7 @@ async fn work(config: Config, external_ip: IpAddr) -> Result<(), Box<dyn Error>>
     //     Err(err)
     // })?;
     // aws_client.add_ip_to_security_group().await?;
-    let sg_res = aws_client.get_security_groups().await?;
-    let sg = get_only_item(&sg_res)?;
-    let res = aws_client.is_rule_in_sg(sg);
-    println!("{:#?}", res);
+    // println!("{:#?}", res);
 
     Ok(())
 }

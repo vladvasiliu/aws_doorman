@@ -15,13 +15,42 @@ mod error;
 pub mod helpers;
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IPRule {
     pub id: String,
     pub ip: IpAddr,
     pub from_port: i64,
     pub to_port: i64,
     pub ip_protocol: String,
+}
+
+impl Default for IPRule {
+    fn default() -> Self {
+        Self {
+            id: Default::default(),
+            ip: IpAddr::from([0, 0, 0, 0]),
+            from_port: Default::default(),
+            to_port: Default::default(),
+            ip_protocol: Default::default(),
+        }
+    }
+}
+
+impl From<IPRule> for IpPermission {
+    fn from(ip_rule: IPRule) -> Self {
+        let ip_range = IpRange {
+            description: Some(ip_rule.id),
+            cidr_ip: Some(ip_rule.ip.to_string()),
+        };
+
+        Self {
+            from_port: Some(ip_rule.from_port),
+            to_port: Some(ip_rule.to_port),
+            ip_protocol: Some(ip_rule.ip_protocol),
+            ip_ranges: Some(vec![ip_range]),
+            ..Default::default()
+        }
+    }
 }
 
 impl PartialEq<IpPermission> for IPRule {
@@ -107,25 +136,9 @@ impl AWSClient {
         Ok(dsg_res.security_groups)
     }
 
-    pub fn is_rule_in_sg<'a>(&self, sg: &'a SecurityGroup) -> Vec<&'a str> {
-        sg.ip_permissions.as_ref().map_or_else(Vec::new, |ip_permission_vec| {
-            ip_permission_vec.iter().filter(|ip_permission|{self.rule == **ip_permission}).flat_map(|ip_permission| {
-                ip_permission.ip_ranges.as_ref().map_or_else(Vec::new, |ip_range_vec| {
-                    ip_range_vec.iter().filter_map(|ip_range| {
-                        if ip_range.description.as_ref() == Some(&self.rule.id) {
-                            ip_range.cidr_ip.as_deref()
-                        } else {
-                            None
-                        }
-                    }).collect()
-                })
-            }).collect()
-        })
-    }
-
     async fn authorize_sg_ingress(&self) -> SGClientResult<()> {
         let request = AuthorizeSecurityGroupIngressRequest {
-            ip_permissions: self.get_ip_permissions(),
+            ip_permissions: Some(vec![self.rule.clone().into()]),
             group_id: Some(self.sg_id.to_string()),
             ..Default::default()
         };
@@ -135,21 +148,6 @@ impl AWSClient {
             .await?;
         Ok(())
     }
-
-    fn get_ip_permissions(&self) -> Option<Vec<IpPermission>> {
-        let ip_range = IpRange {
-            cidr_ip: Some("10.1.1.1/32".to_string()),
-            description: Some("test sg2".to_string()),
-        };
-
-        let ip_perm = IpPermission {
-            from_port: Some(9000),
-            to_port: Some(10000),
-            ip_protocol: Some("tcp".to_string()),
-            ip_ranges: Some(vec![ip_range]),
-            ..Default::default()
-        };
-
-        Some(vec![ip_perm])
-    }
 }
+
+
