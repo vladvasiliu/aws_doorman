@@ -265,7 +265,7 @@ impl From<BufferedHttpResponse> for HttpResponseDescription {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum CardinalityError {
     None,
     TooMany,
