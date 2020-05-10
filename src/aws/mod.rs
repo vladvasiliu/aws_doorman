@@ -3,7 +3,7 @@ use std::{net::IpAddr, result::Result};
 
 use rusoto_ec2::{
     AuthorizeSecurityGroupIngressRequest, DescribeInstancesRequest, DescribeSecurityGroupsRequest,
-    Ec2, Ec2Client, Instance, IpPermission, IpRange, Reservation, SecurityGroup,
+    Ec2, Ec2Client, Instance, IpPermission, IpRange, Reservation, SecurityGroup, RevokeSecurityGroupIngressRequest
 };
 
 use crate::aws::error::{
@@ -148,6 +148,14 @@ impl AWSClient {
             .await?;
         Ok(())
     }
+
+    async fn revoke_sg_ingress(&self, ip_permissions: Vec<IpPermission>) -> SGClientResult<()> {
+        let request = RevokeSecurityGroupIngressRequest {
+            ip_permissions: Some(ip_permissions),
+            ..Default::default()
+        };
+
+        self.ec2_client.revoke_security_group_ingress(request).await?;
+        Ok(())
+    }
 }
-
-

@@ -5,7 +5,7 @@ use std::{fmt, fmt::Formatter};
 use rusoto_core::request::BufferedHttpResponse;
 use rusoto_core::RusotoError;
 use rusoto_ec2::{
-    AuthorizeSecurityGroupIngressError, DescribeInstancesError, DescribeSecurityGroupsError,
+    AuthorizeSecurityGroupIngressError, DescribeInstancesError, DescribeSecurityGroupsError, RevokeSecurityGroupIngressError
 };
 
 #[derive(Debug)]
@@ -110,11 +110,63 @@ impl From<HttpResponseDescription> for SGAuthorizeIngressError {
 }
 
 #[derive(Debug)]
+pub enum SGRevokeIngressError {
+    UnknownHttpError(HttpResponseDescription),
+    Unknown(RusotoError<RevokeSecurityGroupIngressError>),
+}
+
+impl Error for SGRevokeIngressError {}
+
+impl fmt::Display for SGRevokeIngressError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnknownHttpError(err) => write!(f, "{}", err),
+            Self::Unknown(err) => write!(f, "Unknown error: {}", err),
+        }
+    }
+}
+
+
+impl From<RusotoError<RevokeSecurityGroupIngressError>> for SGRevokeIngressError {
+    fn from(err: RusotoError<RevokeSecurityGroupIngressError>) -> Self {
+        match err {
+            RusotoError::Unknown(http_response) => {
+                Self::from(HttpResponseDescription::from(http_response))
+            }
+            _ => Self::Unknown(err),
+        }
+    }
+}
+
+impl From<HttpResponseDescription> for SGRevokeIngressError {
+    fn from(err: HttpResponseDescription) -> Self {
+        // If status is 403, it should be handled by a more generic error
+        // If status is other than 400, we don't know what it is
+        if err.status != 400 {
+            return Self::UnknownHttpError(err);
+        }
+
+        // If there is no error, we can't do anything
+        // There shouldn't be several errors
+        // if there are, the first one is probably the one we want
+        let error_detail = match err.errors.first() {
+            None => return Self::UnknownHttpError(err),
+            Some(error_detail) => error_detail,
+        };
+
+        match error_detail.code.as_deref() {
+            _ => Self::UnknownHttpError(err),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub enum SecurityGroupError {
     ReturnedTooMany,
     ReturnedNone,
     DescribeError(HttpResponseDescription),
     AuthorizeIngressError(SGAuthorizeIngressError),
+    RevokeIngressError(SGRevokeIngressError),
     NotFound(HttpResponseDescription),
     UnknownError(Box<dyn Error>),
 }
@@ -128,6 +180,7 @@ impl fmt::Display for SecurityGroupError {
             Self::ReturnedTooMany => write!(f, "too many instances returned"),
             Self::DescribeError(err) => write!(f, "failed to get security group: {}", err),
             Self::AuthorizeIngressError(err) => write!(f, "failed to authorize ip: {}", err),
+            Self::RevokeIngressError(err) => write!(f, "failed to revoke ip: {}", err),
             Self::NotFound(err) => write!(f, "{}", err),
             Self::UnknownError(err) => write!(f, "{}", err),
         }
@@ -152,6 +205,13 @@ impl From<RusotoError<DescribeSecurityGroupsError>> for SecurityGroupError {
 impl From<RusotoError<AuthorizeSecurityGroupIngressError>> for SecurityGroupError {
     fn from(err: RusotoError<AuthorizeSecurityGroupIngressError>) -> Self {
         Self::AuthorizeIngressError(err.into())
+    }
+}
+
+
+impl From<RusotoError<RevokeSecurityGroupIngressError>> for SecurityGroupError {
+    fn from(err: RusotoError<RevokeSecurityGroupIngressError>) -> Self {
+        Self::RevokeIngressError(err.into())
     }
 }
 
