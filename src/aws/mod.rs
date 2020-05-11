@@ -10,7 +10,7 @@ use rusoto_ec2::{
 use crate::aws::error::{
     AWSClientError, InstanceError, SGAuthorizeIngressError, SGClientResult, SecurityGroupError,
 };
-use crate::aws::helpers::{get_only_item, get_public_ip, has_security_group, is_running};
+use crate::aws::helpers::{get_only_item, get_public_ip, has_security_group, is_running, ips_for_rule_in_sg};
 
 mod error;
 pub mod helpers;
@@ -36,6 +36,19 @@ impl From<IPRule> for IpPermission {
             to_port: Some(ip_rule.to_port),
             ip_protocol: Some(ip_rule.ip_protocol),
             ip_ranges: Some(vec![ip_range]),
+            ..Default::default()
+        }
+    }
+}
+
+impl IPRule {
+    pub fn to_ip_permission_with_ips(&self, ips: &Vec<&str>) -> IpPermission {
+        let ip_ranges = ips.iter().map(|s| IpRange { cidr_ip: Some(s.to_string()), ..Default::default()}).collect();
+        IpPermission {
+            from_port: Some(self.from_port),
+            to_port: Some(self.to_port),
+            ip_protocol: Some(self.ip_protocol.clone()),
+            ip_ranges: Some(ip_ranges),
             ..Default::default()
         }
     }
@@ -137,6 +150,7 @@ impl AWSClient {
 
     async fn revoke_sg_ingress(&self, ip_permissions: Vec<IpPermission>) -> SGClientResult<()> {
         let request = RevokeSecurityGroupIngressRequest {
+            group_id: Some(self.sg_id.to_owned()),
             ip_permissions: Some(ip_permissions),
             ..Default::default()
         };
@@ -144,6 +158,18 @@ impl AWSClient {
         self.ec2_client
             .revoke_security_group_ingress(request)
             .await?;
+        Ok(())
+    }
+
+    /// Removes all IPs with the configured id and rules
+    pub async fn sg_cleanup(&self, rules: Vec<IPRule>) -> SGClientResult<()> {
+        let sec_groups = self.get_security_groups().await?;
+        let sg = get_only_item(&sec_groups)?;
+        let authorized_ips: Vec<&str> = rules.iter().flat_map(|ip_rule| ips_for_rule_in_sg(ip_rule, sg)).collect();
+        let ip_permissions: Vec<IpPermission> = rules.iter().map(|ip_rule| {
+            ip_rule.to_ip_permission_with_ips(&authorized_ips)
+        }).collect();
+        self.revoke_sg_ingress(ip_permissions).await?;
         Ok(())
     }
 }

@@ -50,6 +50,7 @@ async fn work(config: Config, external_ip: IpAddr) -> Result<(), Box<dyn Error>>
     //     Err(err)
     // })?;
     // aws_client.authorize_sg_ingress(vec![ip_rule]).await?;
+    aws_client.sg_clean(vec![ip_rule]).await?;
     // println!("{:#?}", res);
 
     Ok(())

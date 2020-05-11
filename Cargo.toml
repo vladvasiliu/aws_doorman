@@ -18,3 +18,4 @@ tokio = { version = "0.2", features = ["rt-core", "macros"] }
 blob-uuid = "0.4"
 
 [dev-dependencies]
+rusoto_mock = "0.43"

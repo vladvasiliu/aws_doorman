@@ -87,6 +87,7 @@ dependencies = [
  "roxmltree",
  "rusoto_core",
  "rusoto_ec2",
+ "rusoto_mock",
  "tokio",
 ]
 
@@ -1194,6 +1195,21 @@ dependencies = [
  "rusoto_core",
  "serde_urlencoded",
  "xml-rs",
+]
+
+[[package]]
+name = "rusoto_mock"
+version = "0.43.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20617d47af0e8ce5c46f4b8243b13f6e72b67c1c2853a2a1bb9af8729f79f8eb"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "futures",
+ "http",
+ "rusoto_core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

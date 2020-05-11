@@ -52,10 +52,10 @@ pub fn get_only_item<T>(item_vec: &Option<Vec<T>>) -> Result<&T, CardinalityErro
 ///
 /// An AWS Security Group Rule is identified by its ports and protocols.
 /// IpAddr doesn't have a netmask, so this function has to return a str
-fn ips_for_rule_in_sg(rule: IPRule, sg: &SecurityGroup) -> Vec<&str> {
+pub fn ips_for_rule_in_sg<'a>(rule: &IPRule, sg: &'a SecurityGroup) -> Vec<&'a str> {
     sg.ip_permissions.as_ref().map_or_else(Vec::new, |ip_permission_vec| {
         ip_permission_vec.iter()
-            .filter(|ip_permission|{rule == **ip_permission})
+            .filter(|ip_permission|{rule == *ip_permission})
             .flat_map(|ip_permission| {
                 ip_permission.ip_ranges.as_ref().map_or_else(Vec::new, |ip_range_vec| {
                     ip_range_vec.iter().filter_map(|ip_range| {
@@ -85,7 +85,7 @@ mod tests {
                 ..Default::default()
             };
             let rule: IPRule = Default::default();
-            let ip_vec = ips_for_rule_in_sg(rule, &sg);
+            let ip_vec = ips_for_rule_in_sg(&rule, &sg);
             assert!(ip_vec.is_empty())
         }
 
@@ -96,7 +96,7 @@ mod tests {
                 ..Default::default()
             };
             let rule: IPRule = Default::default();
-            let ip_vec = ips_for_rule_in_sg(rule, &sg);
+            let ip_vec = ips_for_rule_in_sg(&rule, &sg);
             assert!(ip_vec.is_empty())
         }
 
@@ -113,7 +113,7 @@ mod tests {
                 ..Default::default()
             };
             let rule: IPRule = Default::default();
-            let ip_vec = ips_for_rule_in_sg(rule, &sg);
+            let ip_vec = ips_for_rule_in_sg(&rule, &sg);
             assert!(ip_vec.is_empty())
         }
 
@@ -151,7 +151,7 @@ mod tests {
                 ip_protocol: ip_protocol.to_owned(),
                 ..Default::default()
             };
-            let res = ips_for_rule_in_sg(rule, &sg);
+            let res = ips_for_rule_in_sg(&rule, &sg);
             assert_eq!(ip_vec, res)
         }
     }

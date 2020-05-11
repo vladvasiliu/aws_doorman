@@ -111,6 +111,7 @@ impl From<HttpResponseDescription> for SGAuthorizeIngressError {
 
 #[derive(Debug)]
 pub enum SGRevokeIngressError {
+    RuleNotFound(HttpResponseDescription),
     UnknownHttpError(HttpResponseDescription),
     Unknown(RusotoError<RevokeSecurityGroupIngressError>),
 }
@@ -120,7 +121,7 @@ impl Error for SGRevokeIngressError {}
 impl fmt::Display for SGRevokeIngressError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Self::UnknownHttpError(err) => write!(f, "{}", err),
+            Self::UnknownHttpError(err) | Self::RuleNotFound(err) => write!(f, "{}", err),
             Self::Unknown(err) => write!(f, "Unknown error: {}", err),
         }
     }
@@ -155,6 +156,7 @@ impl From<HttpResponseDescription> for SGRevokeIngressError {
         };
 
         match error_detail.code.as_deref() {
+            Some("InvalidPermission.NotFound") => Self::RuleNotFound(err),
             _ => Self::UnknownHttpError(err),
         }
     }
@@ -263,6 +265,12 @@ impl From<SecurityGroupError> for AWSClientError<SecurityGroupError> {
 impl From<AddrParseError> for InstanceError {
     fn from(err: AddrParseError) -> Self {
         Self::MalformedPublicIP(err)
+    }
+}
+
+impl From<CardinalityError> for AWSClientError<SecurityGroupError> {
+    fn from(err: CardinalityError) -> Self {
+        Self::Service(SecurityGroupError::from(err))
     }
 }
 
