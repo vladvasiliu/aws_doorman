@@ -3,7 +3,8 @@ use std::{net::IpAddr, result::Result};
 
 use rusoto_ec2::{
     AuthorizeSecurityGroupIngressRequest, DescribeInstancesRequest, DescribeSecurityGroupsRequest,
-    Ec2, Ec2Client, Instance, IpPermission, IpRange, Reservation, SecurityGroup, RevokeSecurityGroupIngressRequest
+    Ec2, Ec2Client, Instance, IpPermission, IpRange, Reservation,
+    RevokeSecurityGroupIngressRequest, SecurityGroup,
 };
 
 use crate::aws::error::{
@@ -14,33 +15,20 @@ use crate::aws::helpers::{get_only_item, get_public_ip, has_security_group, is_r
 mod error;
 pub mod helpers;
 
-
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, Default)]
 pub struct IPRule {
     pub id: String,
-    pub ip: IpAddr,
+    pub ip: String,
     pub from_port: i64,
     pub to_port: i64,
     pub ip_protocol: String,
-}
-
-impl Default for IPRule {
-    fn default() -> Self {
-        Self {
-            id: Default::default(),
-            ip: IpAddr::from([0, 0, 0, 0]),
-            from_port: Default::default(),
-            to_port: Default::default(),
-            ip_protocol: Default::default(),
-        }
-    }
 }
 
 impl From<IPRule> for IpPermission {
     fn from(ip_rule: IPRule) -> Self {
         let ip_range = IpRange {
             description: Some(ip_rule.id),
-            cidr_ip: Some(ip_rule.ip.to_string()),
+            cidr_ip: Some(ip_rule.ip),
         };
 
         Self {
@@ -55,13 +43,17 @@ impl From<IPRule> for IpPermission {
 
 impl PartialEq<IpPermission> for IPRule {
     fn eq(&self, other: &IpPermission) -> bool {
-        Some(self.from_port) == other.from_port && Some(self.to_port) == other.to_port && Some(&self.ip_protocol) == other.ip_protocol.as_ref()
+        Some(self.from_port) == other.from_port
+            && Some(self.to_port) == other.to_port
+            && Some(&self.ip_protocol) == other.ip_protocol.as_ref()
     }
 }
 
 impl PartialEq<IPRule> for IpPermission {
     fn eq(&self, other: &IPRule) -> bool {
-        self.from_port == Some(other.from_port) && self.to_port == Some(other.to_port) && self.ip_protocol.as_ref() == Some(&other.ip_protocol)
+        self.from_port == Some(other.from_port)
+            && self.to_port == Some(other.to_port)
+            && self.ip_protocol.as_ref() == Some(&other.ip_protocol)
     }
 }
 
@@ -69,13 +61,9 @@ pub struct AWSClient {
     pub ec2_client: Ec2Client,
     pub instance_id: String,
     pub sg_id: String,
-    pub rule: IPRule,
 }
 
 impl AWSClient {
-    //
-    // Instance related
-    //
     pub fn is_instance_sane(&self, instance: &Instance) -> Result<bool, InstanceError> {
         is_running(instance)?;
         has_security_group(instance, &self.sg_id)?;
@@ -116,11 +104,7 @@ impl AWSClient {
         Ok(ip)
     }
 
-    //
-    // Security Group related
-    //
-
-    pub async fn get_security_groups(&self) -> SGClientResult<Option<Vec<SecurityGroup>>> {
+    async fn get_security_groups(&self) -> SGClientResult<Option<Vec<SecurityGroup>>> {
         let dsg_res = self
             .ec2_client
             .describe_security_groups(DescribeSecurityGroupsRequest {
@@ -136,9 +120,11 @@ impl AWSClient {
         Ok(dsg_res.security_groups)
     }
 
-    async fn authorize_sg_ingress(&self) -> SGClientResult<()> {
+    async fn authorize_sg_ingress(&self, rules: Vec<IPRule>) -> SGClientResult<()> {
+        let ip_permissions: Vec<IpPermission> =
+            rules.iter().map(|rule| rule.clone().into()).collect();
         let request = AuthorizeSecurityGroupIngressRequest {
-            ip_permissions: Some(vec![self.rule.clone().into()]),
+            ip_permissions: Some(ip_permissions),
             group_id: Some(self.sg_id.to_string()),
             ..Default::default()
         };
@@ -155,7 +141,9 @@ impl AWSClient {
             ..Default::default()
         };
 
-        self.ec2_client.revoke_security_group_ingress(request).await?;
+        self.ec2_client
+            .revoke_security_group_ingress(request)
+            .await?;
         Ok(())
     }
 }

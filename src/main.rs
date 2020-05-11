@@ -31,9 +31,10 @@ async fn main() {
 }
 
 async fn work(config: Config, external_ip: IpAddr) -> Result<(), Box<dyn Error>> {
+    let ip = format!("{}/32", external_ip);
     let ip_rule = IPRule {
         id: String::from("test sg rule id"),
-        ip: external_ip,
+        ip,
         from_port: 9999,
         to_port: 10000,
         ip_protocol: "tcp".to_string(),
@@ -43,13 +44,12 @@ async fn work(config: Config, external_ip: IpAddr) -> Result<(), Box<dyn Error>>
         ec2_client,
         instance_id: config.instance_id,
         sg_id: config.sg_id,
-        rule: ip_rule,
     };
     // let _instance_ip = aws_client.get_instance_ip().await.or_else(|err| {
     //     error!("Failed to retrieve instance IP: {}", err);
     //     Err(err)
     // })?;
-    // aws_client.add_ip_to_security_group().await?;
+    // aws_client.authorize_sg_ingress(vec![ip_rule]).await?;
     // println!("{:#?}", res);
 
     Ok(())

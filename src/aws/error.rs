@@ -176,11 +176,11 @@ impl Error for SecurityGroupError {}
 impl fmt::Display for SecurityGroupError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Self::ReturnedNone => write!(f, "no instances returned"),
-            Self::ReturnedTooMany => write!(f, "too many instances returned"),
-            Self::DescribeError(err) => write!(f, "failed to get security group: {}", err),
-            Self::AuthorizeIngressError(err) => write!(f, "failed to authorize ip: {}", err),
-            Self::RevokeIngressError(err) => write!(f, "failed to revoke ip: {}", err),
+            Self::ReturnedNone => write!(f, "No security groups returned"),
+            Self::ReturnedTooMany => write!(f, "Too many security groups returned"),
+            Self::DescribeError(err) => write!(f, "Failed to get security group: {}", err),
+            Self::AuthorizeIngressError(err) => write!(f, "Failed to authorize ip: {}", err),
+            Self::RevokeIngressError(err) => write!(f, "Failed to revoke ip: {}", err),
             Self::NotFound(err) => write!(f, "{}", err),
             Self::UnknownError(err) => write!(f, "{}", err),
         }

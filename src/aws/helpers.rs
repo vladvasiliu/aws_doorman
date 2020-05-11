@@ -51,6 +51,7 @@ pub fn get_only_item<T>(item_vec: &Option<Vec<T>>) -> Result<&T, CardinalityErro
 /// to add is present
 ///
 /// An AWS Security Group Rule is identified by its ports and protocols.
+/// IpAddr doesn't have a netmask, so this function has to return a str
 fn ips_for_rule_in_sg(rule: IPRule, sg: &SecurityGroup) -> Vec<&str> {
     sg.ip_permissions.as_ref().map_or_else(Vec::new, |ip_permission_vec| {
         ip_permission_vec.iter()
