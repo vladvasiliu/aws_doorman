@@ -9,16 +9,38 @@ use crate::config::Config;
 use std::error::Error;
 use std::net::IpAddr;
 
+use external_ip::get_ip;
+
 mod aws;
 mod config;
-mod ip;
 
 #[tokio::main]
 async fn main() {
-    setup_logger(LevelFilter::Info).unwrap();
-    // let my_external_ip = ip::guess().await.unwrap_or_else(|_| exit(1));
-    let my_external_ip = IpAddr::from([192, 168, 1, 1]);
-    let config = Config::from_args().unwrap();
+    let config = match Config::from_args() {
+        Ok(config) => config,
+        Err(err) => {
+            eprintln!("Failed to load configuration:\n{}", err);
+            exit(1)
+        }
+    };
+
+    let log_level = match config.debug {
+        true => LevelFilter::Debug,
+        false => LevelFilter::Info,
+    };
+    setup_logger(log_level).unwrap();
+
+    let my_external_ip = match config.external_ip {
+        None => {
+            info!("No external IP given, attempting to determine it automatically...");
+            get_ip().await.unwrap_or_else(||{
+                error!("Failed to determine external ip.");
+                exit(1)
+            })
+        },
+        Some(ip) => ip,
+    };
+    info!("Using external IP {}", my_external_ip);
 
     match work(config, my_external_ip).await {
         Ok(()) => info!("Done!"),
