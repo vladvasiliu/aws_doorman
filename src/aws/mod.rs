@@ -1,5 +1,5 @@
-use log::error;
-use std::{net::IpAddr, result::Result};
+use log::{error, warn};
+use std::{fmt, net::IpAddr, result::Result};
 
 use rusoto_ec2::{
     AuthorizeSecurityGroupIngressRequest, DescribeInstancesRequest, DescribeSecurityGroupsRequest,
@@ -11,6 +11,7 @@ use crate::aws::error::{
     AWSClientError, InstanceError, SGAuthorizeIngressError, SGClientResult, SecurityGroupError,
 };
 use crate::aws::helpers::{get_only_item, get_public_ip, has_security_group, is_running, ips_for_rule_in_sg};
+use std::fmt::Formatter;
 
 mod error;
 pub mod helpers;
@@ -51,6 +52,17 @@ impl IPRule {
             ip_ranges: Some(ip_ranges),
             ..Default::default()
         }
+    }
+}
+
+impl fmt::Display for IPRule {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let range = if self.from_port < self.to_port {
+            format!("{} - {}", self.from_port, self.to_port)
+        } else {
+            format!("{}", self.from_port)
+        };
+        write!(f, "{} {} from {}", self.ip_protocol, range, self.ip)
     }
 }
 
@@ -161,7 +173,7 @@ impl AWSClient {
         Ok(())
     }
 
-    /// Removes all IPs with the configured id and rules
+    /// Removes all IPs with the configured id and given rules
     pub async fn sg_cleanup(&self, rules: Vec<IPRule>) -> SGClientResult<()> {
         let sec_groups = self.get_security_groups().await?;
         let sg = get_only_item(&sec_groups)?;
@@ -170,6 +182,24 @@ impl AWSClient {
             ip_rule.to_ip_permission_with_ips(&authorized_ips)
         }).collect();
         self.revoke_sg_ingress(ip_permissions).await?;
+        Ok(())
+    }
+
+    /// Authorize the configured rules
+    ///
+    /// Will log a warning if a rule (proto / port / ip) is already present
+    pub async fn sg_authorize(&self, rules: Vec<IPRule>) -> SGClientResult<()> {
+        // Looping over the rules in order to allow the request to fail in case of duplication
+        // Calling the EC2 API with several rules will fail completely if one of them is duplicated.
+        for rule in rules {
+            match self.authorize_sg_ingress(vec![rule.clone()]).await {
+                Ok(()) => (),
+                Err(AWSClientError::Service(SecurityGroupError::AuthorizeIngressError(SGAuthorizeIngressError::DuplicateRule(err)))) => {
+                    warn!("Duplicate rule: {}", rule);
+                },
+                Err(err) => return Err(err),
+            }
+        }
         Ok(())
     }
 }

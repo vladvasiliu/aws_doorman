@@ -15,7 +15,7 @@ mod ip;
 
 #[tokio::main]
 async fn main() {
-    setup_logger(LevelFilter::Debug).unwrap();
+    setup_logger(LevelFilter::Info).unwrap();
     // let my_external_ip = ip::guess().await.unwrap_or_else(|_| exit(1));
     let my_external_ip = IpAddr::from([192, 168, 1, 1]);
     let config = Config::from_args().unwrap();
@@ -31,14 +31,22 @@ async fn main() {
 }
 
 async fn work(config: Config, external_ip: IpAddr) -> Result<(), Box<dyn Error>> {
-    let ip = format!("{}/32", external_ip);
-    let ip_rule = IPRule {
-        id: String::from("test sg rule id"),
-        ip,
-        from_port: 9999,
-        to_port: 10000,
-        ip_protocol: "tcp".to_string(),
-    };
+    let ip_rules = vec![
+        IPRule {
+            id: String::from("test sg rule id"),
+            ip: "192.168.1.1/32".to_string(),
+            from_port: 9999,
+            to_port: 10000,
+            ip_protocol: "tcp".to_string(),
+        },
+        IPRule {
+            id: String::from("test sg rule id"),
+            ip: "192.168.1.2/32".to_string(),
+            from_port: 9999,
+            to_port: 10000,
+            ip_protocol: "tcp".to_string(),
+        }
+    ];
     let ec2_client = Ec2Client::new(Region::EuWest3);
     let aws_client = AWSClient {
         ec2_client,
@@ -49,8 +57,8 @@ async fn work(config: Config, external_ip: IpAddr) -> Result<(), Box<dyn Error>>
     //     error!("Failed to retrieve instance IP: {}", err);
     //     Err(err)
     // })?;
-    // aws_client.authorize_sg_ingress(vec![ip_rule]).await?;
-    aws_client.sg_clean(vec![ip_rule]).await?;
+    aws_client.sg_authorize(ip_rules).await?;
+    // aws_client.sg_cleanup(vec![ip_rule]).await?;
     // println!("{:#?}", res);
 
     Ok(())
