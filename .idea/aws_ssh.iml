@@ -84,6 +84,7 @@
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/time-90091ab405b5a5fd/out" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/standback-3866709bf62bb927/out" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/c-ares-sys-0e60356031d84aeb/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/byteorder-ff1d3ffc691bcf9b/out" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

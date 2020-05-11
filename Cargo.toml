@@ -8,9 +8,12 @@ edition = "2018"
 
 [dependencies]
 clap = { version = "2.33", features = ["color"] }
+confy = "0.4"
 external-ip = "1.0"
 fern = "0.6"
+lazy_static = "1.4"
 log = "0.4"
+regex = "1"
 roxmltree = "0.11"
 rusoto_core = "0.43.0"
 rusoto_ec2 = "0.43.0"

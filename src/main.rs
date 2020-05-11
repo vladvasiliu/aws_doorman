@@ -53,33 +53,33 @@ async fn main() {
 }
 
 async fn work(config: Config, external_ip: IpAddr) -> Result<(), Box<dyn Error>> {
-    let ip_rules = vec![
-        IPRule {
-            id: String::from("test sg rule id"),
-            ip: "192.168.1.1/32".to_string(),
-            from_port: 9999,
-            to_port: 10000,
-            ip_protocol: "tcp".to_string(),
-        },
-        IPRule {
-            id: String::from("test sg rule id"),
-            ip: "192.168.1.2/32".to_string(),
-            from_port: 9999,
-            to_port: 10000,
-            ip_protocol: "tcp".to_string(),
-        }
-    ];
-    let ec2_client = Ec2Client::new(Region::EuWest3);
-    let aws_client = AWSClient {
-        ec2_client,
-        instance_id: config.instance_id,
-        sg_id: config.sg_id,
-    };
+    // let ip_rules = vec![
+    //     IPRule {
+    //         id: String::from("test sg rule id"),
+    //         ip: "192.168.1.1/32".to_string(),
+    //         from_port: 9999,
+    //         to_port: 10000,
+    //         ip_protocol: "tcp".to_string(),
+    //     },
+    //     IPRule {
+    //         id: String::from("test sg rule id"),
+    //         ip: "192.168.1.2/32".to_string(),
+    //         from_port: 9999,
+    //         to_port: 10000,
+    //         ip_protocol: "tcp".to_string(),
+    //     }
+    // ];
+    // let ec2_client = Ec2Client::new(Region::EuWest3);
+    // let aws_client = AWSClient {
+    //     ec2_client,
+    //     instance_id: config.instance_id,
+    //     sg_id: config.sg_id,
+    // };
     // let _instance_ip = aws_client.get_instance_ip().await.or_else(|err| {
     //     error!("Failed to retrieve instance IP: {}", err);
     //     Err(err)
     // })?;
-    aws_client.sg_authorize(ip_rules).await?;
+    // aws_client.sg_authorize(ip_rules).await?;
     // aws_client.sg_cleanup(vec![ip_rule]).await?;
     // println!("{:#?}", res);
 
