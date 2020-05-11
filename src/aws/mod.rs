@@ -1,4 +1,4 @@
-use log::{error, warn};
+use log::{error, info, warn};
 use std::{fmt, net::IpAddr, result::Result};
 
 use rusoto_ec2::{
@@ -181,7 +181,11 @@ impl AWSClient {
         let ip_permissions: Vec<IpPermission> = rules.iter().map(|ip_rule| {
             ip_rule.to_ip_permission_with_ips(&authorized_ips)
         }).collect();
-        self.revoke_sg_ingress(ip_permissions).await?;
+        if authorized_ips.is_empty() {
+            info!("Nothing to delete!")
+        } else {
+            self.revoke_sg_ingress(ip_permissions).await?;
+        };
         Ok(())
     }
 
@@ -194,7 +198,7 @@ impl AWSClient {
         for rule in rules {
             match self.authorize_sg_ingress(vec![rule.clone()]).await {
                 Ok(()) => (),
-                Err(AWSClientError::Service(SecurityGroupError::AuthorizeIngressError(SGAuthorizeIngressError::DuplicateRule(err)))) => {
+                Err(AWSClientError::Service(SecurityGroupError::AuthorizeIngressError(SGAuthorizeIngressError::DuplicateRule(_)))) => {
                     warn!("Duplicate rule: {}", rule);
                 },
                 Err(err) => return Err(err),

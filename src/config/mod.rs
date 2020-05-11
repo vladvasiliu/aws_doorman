@@ -1,11 +1,8 @@
-use std::error::Error;
-use std::fmt;
 
 use clap::{crate_name, crate_version, App, AppSettings, Arg};
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::fmt::Formatter;
-use std::net::{IpAddr, AddrParseError};
+use std::net::IpAddr;
 use std::str::FromStr;
 use crate::config::error::ConfigError;
 use std::num::ParseIntError;
@@ -23,19 +20,24 @@ pub struct Config {
     pub from_port: i64,
     pub to_port: i64,
     pub debug: bool,
+    pub cleanup: bool,
 }
 
 impl Config {
-    fn is_sane(&self) -> Result<(), ConfigError> {
-        Ok(())
-    }
-
-
     pub fn from_args() -> Result<Self, ConfigError> {
         let matches = App::new(crate_name!())
             .version(crate_version!())
             .setting(AppSettings::ColoredHelp)
             .setting(AppSettings::DeriveDisplayOrder)
+            .arg(
+                Arg::with_name("cleanup")
+                    .long("cleanup")
+                    .short("c")
+                    .takes_value(false)
+                    .required(false)
+                    .multiple(false)
+                    .help("Only clean up the rules")
+            )
             .arg(
                 Arg::with_name("debug")
                     .short("d")
@@ -63,7 +65,8 @@ impl Config {
                     .value_name("EXT IP")
                     .required(false)
                     .multiple(false)
-                    .help("External IP"),
+                    .help("External IP")
+                    .validator(check_ip),
             )
             .arg(
                 Arg::with_name("sg_id")
@@ -122,18 +125,19 @@ impl Config {
         let sg_id = matches.value_of("sg_id").unwrap().to_string();
         let sg_desc = matches.value_of("sg_desc").unwrap().to_string();
         let debug = matches.is_present("debug");
+        let cleanup = matches.is_present("cleanup");
 
         let ip_protocol = matches.value_of("ip_protocol").unwrap().to_string();
-        let from_port: i64 = matches.value_of("from_port").unwrap().parse().map_err(ConfigError::MalformedPort)?;
+        let from_port: i64 = matches.value_of("from_port").unwrap().parse().unwrap();
 
         let to_port: i64 = match matches.value_of("to_port") {
             None => from_port,
-            Some(to_port) => to_port.parse().map_err(ConfigError::MalformedPort)?,
+            Some(to_port) => to_port.parse().unwrap(),
         };
 
         let external_ip = match matches.value_of("ip") {
             None => None,
-            Some(ip_str) => Some(IpAddr::from_str(ip_str)?),
+            Some(ip_str) => Some(IpAddr::from_str(ip_str).unwrap()),
         };
 
         if to_port < from_port {
@@ -149,6 +153,7 @@ impl Config {
             from_port,
             to_port,
             debug,
+            cleanup,
         })
     }
 }
@@ -188,5 +193,10 @@ fn check_port_number(value: String) -> Result<(), String> {
     if int_value < 0 || int_value > 65535 {
         return Err("port number should be between 0 and 65535".to_string())
     }
+    Ok(())
+}
+
+fn check_ip(value: String) -> Result<(), String> {
+    IpAddr::from_str(&value).or_else(|err| Err(err.to_string()))?;
     Ok(())
 }

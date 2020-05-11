@@ -4,10 +4,9 @@ use log::{debug, error, info, LevelFilter};
 use rusoto_core::Region;
 use rusoto_ec2::Ec2Client;
 
-use crate::aws::{AWSClient, IPRule, helpers::get_only_item};
+use crate::aws::{AWSClient, IPRule};
 use crate::config::Config;
 use std::error::Error;
-use std::net::IpAddr;
 
 use external_ip::get_ip;
 
@@ -16,7 +15,7 @@ mod config;
 
 #[tokio::main]
 async fn main() {
-    let config = match Config::from_args() {
+    let mut config = match Config::from_args() {
         Ok(config) => config,
         Err(err) => {
             eprintln!("Failed to load configuration:\n{}", err);
@@ -30,19 +29,16 @@ async fn main() {
     };
     setup_logger(log_level).unwrap();
 
-    let my_external_ip = match config.external_ip {
-        None => {
-            info!("No external IP given, attempting to determine it automatically...");
-            get_ip().await.unwrap_or_else(||{
-                error!("Failed to determine external ip.");
-                exit(1)
-            })
-        },
-        Some(ip) => ip,
+    if config.external_ip.is_none() {
+        info!("No external IP given, attempting to determine it automatically...");
+        config.external_ip = Some(get_ip().await.unwrap_or_else(||{
+            error!("Failed to determine external ip.");
+            exit(1)
+        }))
     };
-    info!("Using external IP {}", my_external_ip);
+    info!("Using external IP {}", config.external_ip.unwrap());
 
-    match work(config, my_external_ip).await {
+    match work(config).await {
         Ok(()) => info!("Done!"),
         Err(err) => {
             debug!("{:#?}", err);
@@ -52,29 +48,29 @@ async fn main() {
     }
 }
 
-async fn work(config: Config, external_ip: IpAddr) -> Result<(), Box<dyn Error>> {
-    // let ip_rules = vec![
-    //     IPRule {
-    //         id: String::from("test sg rule id"),
-    //         ip: "192.168.1.1/32".to_string(),
-    //         from_port: 9999,
-    //         to_port: 10000,
-    //         ip_protocol: "tcp".to_string(),
-    //     },
-    //     IPRule {
-    //         id: String::from("test sg rule id"),
-    //         ip: "192.168.1.2/32".to_string(),
-    //         from_port: 9999,
-    //         to_port: 10000,
-    //         ip_protocol: "tcp".to_string(),
-    //     }
-    // ];
-    // let ec2_client = Ec2Client::new(Region::EuWest3);
-    // let aws_client = AWSClient {
-    //     ec2_client,
-    //     instance_id: config.instance_id,
-    //     sg_id: config.sg_id,
-    // };
+async fn work(config: Config) -> Result<(), Box<dyn Error>> {
+    let ip_rules = vec![
+        IPRule {
+            id: config.sg_id.to_owned(),
+            ip: config.external_ip.unwrap().to_string(),
+            from_port: config.from_port,
+            to_port: config.to_port,
+            ip_protocol: config.ip_protocol,
+        },
+    ];
+    let ec2_client = Ec2Client::new(Region::EuWest3);
+    let aws_client = AWSClient {
+        ec2_client,
+        instance_id: config.instance_id,
+        sg_id: config.sg_id.to_owned(),
+    };
+
+    if config.cleanup {
+        info!("Cleaning up...");
+        return aws_client.sg_cleanup(ip_rules).await.map_err(Box::from)
+    }
+
+
     // let _instance_ip = aws_client.get_instance_ip().await.or_else(|err| {
     //     error!("Failed to retrieve instance IP: {}", err);
     //     Err(err)
