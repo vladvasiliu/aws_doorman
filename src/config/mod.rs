@@ -8,6 +8,7 @@ use std::fmt::Formatter;
 use std::net::{IpAddr, AddrParseError};
 use std::str::FromStr;
 use crate::config::error::ConfigError;
+use std::num::ParseIntError;
 
 pub mod error;
 
@@ -26,15 +27,6 @@ pub struct Config {
 
 impl Config {
     fn is_sane(&self) -> Result<(), ConfigError> {
-        if self.from_port < 0 {
-            return Err(ConfigError::IncorrectPortRange("Port numbers should be positive".to_string()))
-        }
-        if self.to_port < self.from_port {
-            return Err(ConfigError::IncorrectPortRange("Ports should be in ascending order".to_string()))
-        }
-        check_sg_format(&self.sg_id)?;
-        check_instance_format(&self.instance_id)?;
-        check_ip_protocol(&self.ip_protocol)?;
         Ok(())
     }
 
@@ -43,26 +35,7 @@ impl Config {
         let matches = App::new(crate_name!())
             .version(crate_version!())
             .setting(AppSettings::ColoredHelp)
-            .arg(
-                Arg::with_name("instance_id")
-                    .short("i")
-                    .long("instance")
-                    .value_name("INSTANCE ID")
-                    .takes_value(true)
-                    .required(true)
-                    .multiple(false)
-                    .help("AWS Instance ID"),
-            )
-            .arg(
-                Arg::with_name("sg_id")
-                    .short("s")
-                    .long("sg-id")
-                    .value_name("SECGROUP ID")
-                    .takes_value(true)
-                    .required(true)
-                    .multiple(false)
-                    .help("AWS Security Group ID"),
-            )
+            .setting(AppSettings::DeriveDisplayOrder)
             .arg(
                 Arg::with_name("debug")
                     .short("d")
@@ -73,13 +46,15 @@ impl Config {
                     .help("Enable debug logging"),
             )
             .arg(
-                Arg::with_name("sg_desc")
-                    .long("sg-desc")
+                Arg::with_name("instance_id")
+                    .short("i")
+                    .long("instance")
+                    .value_name("INSTANCE ID")
                     .takes_value(true)
-                    .value_name("SG DESC")
                     .required(true)
                     .multiple(false)
-                    .help("SG description"),
+                    .help("AWS Instance ID")
+            .validator(check_instance_format)
             )
             .arg(
                 Arg::with_name("ip")
@@ -91,31 +66,55 @@ impl Config {
                     .help("External IP"),
             )
             .arg(
+                Arg::with_name("sg_id")
+                    .short("s")
+                    .long("sg-id")
+                    .value_name("SECGROUP ID")
+                    .takes_value(true)
+                    .required(true)
+                    .multiple(false)
+                    .help("AWS Security Group ID")
+                    .validator(check_sg_format)
+            )
+            .arg(
+                Arg::with_name("sg_desc")
+                    .long("sg-desc")
+                    .takes_value(true)
+                    .value_name("SG DESC")
+                    .required(true)
+                    .multiple(false)
+                    .help("SG description"),
+            )
+            .arg(
                 Arg::with_name("ip_protocol")
                     .long("proto")
                     .takes_value(true)
                     .value_name("IP protocol")
                     .required(true)
                     .multiple(false)
-                    .help("IP protocol"),
+                    .help("IP protocol")
+                    .validator(check_ip_protocol)
             )
             .arg(
                 Arg::with_name("from_port")
                     .long("from")
+                    .visible_alias("port")
                     .takes_value(true)
-                    .value_name("from_port")
+                    .value_name("FROM PORT")
                     .required(true)
                     .multiple(false)
-                    .help("from port"),
+                    .help("from port")
+                    .validator(check_port_number)
             )
             .arg(
                 Arg::with_name("to_port")
                     .long("to")
                     .takes_value(true)
-                    .value_name("to_port")
+                    .value_name("TO PORT")
                     .required(false)
                     .multiple(false)
-                    .help("to port"),
+                    .help("to port")
+                    .validator(check_port_number)
             )
             .get_matches();
 
@@ -137,7 +136,11 @@ impl Config {
             Some(ip_str) => Some(IpAddr::from_str(ip_str)?),
         };
 
-        let config = Self {
+        if to_port < from_port {
+            return Err(ConfigError::IncorrectPortRange("Ports should be in ascending order".to_string()))
+        }
+
+        Ok(Self {
             instance_id,
             sg_id,
             sg_desc,
@@ -146,39 +149,44 @@ impl Config {
             from_port,
             to_port,
             debug,
-        };
-
-        config.is_sane()?;
-        Ok(config)
+        })
     }
 }
 
-fn check_sg_format(sg: &str) -> Result<(), ConfigError> {
+fn check_sg_format(sg: String) -> Result<(), String> {
     lazy_static! {
         static ref RE: Regex = Regex::new(r"\A(?i:sg-([[:alnum:]]{8}|[[:alnum:]]{17}))\z").unwrap();
     }
-    match RE.is_match(sg) {
+    match RE.is_match(&sg) {
         true => Ok(()),
-        false => Err(ConfigError::MalformedSG)
+        false => Err("expected format is 'sg-1234567890abcdef0'".to_string())
     }
 }
 
-fn check_instance_format(sg: &str) -> Result<(), ConfigError> {
+fn check_instance_format(sg: String) -> Result<(), String> {
     lazy_static! {
         static ref RE: Regex = Regex::new(r"\A(?i:i-([[:alnum:]]{8}|[[:alnum:]]{17}))\z").unwrap();
     }
-    match RE.is_match(sg) {
+    match RE.is_match(&sg) {
         true => Ok(()),
-        false => Err(ConfigError::MalformedInstance)
+        false => Err("expected format is 'i-1234567890abcdef0'".to_string())
     }
 }
 
-fn check_ip_protocol(sg: &str) -> Result<(), ConfigError> {
+fn check_ip_protocol(sg: String) -> Result<(), String> {
     lazy_static! {
         static ref RE: Regex = Regex::new(r"\A(?i:(tcp)|(udp))\z").unwrap();
     }
-    match RE.is_match(sg) {
+    match RE.is_match(&sg) {
         true => Ok(()),
-        false => Err(ConfigError::MalformedProtocol)
+        false => Err("expected 'tcp' or 'udp'".to_string())
     }
+}
+
+fn check_port_number(value: String) -> Result<(), String> {
+    let int_value: i64 = value.parse().or_else(|err: ParseIntError| Err(err.to_string()))?;
+    if int_value < 0 || int_value > 65535 {
+        return Err("port number should be between 0 and 65535".to_string())
+    }
+    Ok(())
 }
