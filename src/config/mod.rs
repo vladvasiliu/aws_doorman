@@ -12,7 +12,7 @@ pub mod error;
 
 #[derive(Debug)]
 pub struct Config {
-    pub instance_id: String,
+    // pub instance_id: String,
     pub sg_id: String,
     pub sg_desc: String,
     pub external_ip: Option<IpAddr>,
@@ -47,17 +47,17 @@ impl Config {
                     .multiple(false)
                     .help("Enable debug logging"),
             )
-            .arg(
-                Arg::with_name("instance_id")
-                    .short("i")
-                    .long("instance")
-                    .value_name("INSTANCE ID")
-                    .takes_value(true)
-                    .required(true)
-                    .multiple(false)
-                    .help("AWS Instance ID")
-            .validator(check_instance_format)
-            )
+            // .arg(
+            //     Arg::with_name("instance_id")
+            //         .short("i")
+            //         .long("instance")
+            //         .value_name("INSTANCE ID")
+            //         .takes_value(true)
+            //         .required(true)
+            //         .multiple(false)
+            //         .help("AWS Instance ID")
+            // .validator(check_instance_format)
+            // )
             .arg(
                 Arg::with_name("ip")
                     .long("ip")
@@ -121,7 +121,7 @@ impl Config {
             )
             .get_matches();
 
-        let instance_id = matches.value_of("instance_id").unwrap().to_string();
+        // let instance_id = matches.value_of("instance_id").unwrap().to_string();
         let sg_id = matches.value_of("sg_id").unwrap().to_string();
         let sg_desc = matches.value_of("sg_desc").unwrap().to_string();
         let debug = matches.is_present("debug");
@@ -145,7 +145,7 @@ impl Config {
         }
 
         Ok(Self {
-            instance_id,
+            // instance_id,
             sg_id,
             sg_desc,
             external_ip,

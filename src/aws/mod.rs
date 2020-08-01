@@ -2,13 +2,12 @@ use log::{error, info, warn};
 use std::{fmt, net::IpAddr, result::Result};
 
 use rusoto_ec2::{
-    AuthorizeSecurityGroupIngressRequest, DescribeInstancesRequest, DescribeSecurityGroupsRequest,
-    Ec2, Ec2Client, Instance, IpPermission, IpRange, Reservation,
-    RevokeSecurityGroupIngressRequest, SecurityGroup,
+    AuthorizeSecurityGroupIngressRequest, DescribeSecurityGroupsRequest,
+    Ec2, Ec2Client, IpPermission, IpRange, RevokeSecurityGroupIngressRequest, SecurityGroup,
 };
 
 use crate::aws::error::{
-    AWSClientError, InstanceError, SGAuthorizeIngressError, SGClientResult, SecurityGroupError,
+    AWSClientError, SGAuthorizeIngressError, SGClientResult, SecurityGroupError,
 };
 use crate::aws::helpers::{get_only_item, get_public_ip, has_security_group, is_running, ips_for_rule_in_sg};
 use std::fmt::Formatter;
@@ -84,50 +83,50 @@ impl PartialEq<IPRule> for IpPermission {
 
 pub struct AWSClient {
     pub ec2_client: Ec2Client,
-    pub instance_id: String,
+    // pub instance_id: String,
     pub sg_id: String,
 }
 
 impl AWSClient {
-    pub fn is_instance_sane(&self, instance: &Instance) -> Result<bool, InstanceError> {
-        is_running(instance)?;
-        has_security_group(instance, &self.sg_id)?;
-        Ok(true)
-    }
+    // pub fn is_instance_sane(&self, instance: &Instance) -> Result<bool, InstanceError> {
+    //     is_running(instance)?;
+    //     has_security_group(instance, &self.sg_id)?;
+    //     Ok(true)
+    // }
 
-    async fn get_reservations(
-        &self,
-    ) -> Result<Option<Vec<Reservation>>, AWSClientError<InstanceError>> {
-        let di_res = self
-            .ec2_client
-            .describe_instances(DescribeInstancesRequest {
-                instance_ids: Some(vec![self.instance_id.clone()]),
-                ..Default::default()
-            })
-            .await?;
-        Ok(di_res.reservations)
-    }
-
-    fn get_ip_from_reservations(
-        &self,
-        reservations: Option<Vec<Reservation>>,
-    ) -> Result<IpAddr, InstanceError> {
-        // We're expecting one and only one instance,
-        // so there should only be one reservation with one instance
-        let reservation = get_only_item(&reservations)?;
-        let instance = get_only_item(&reservation.instances)?;
-
-        self.is_instance_sane(instance)?;
-        let public_ip = get_public_ip(instance)?;
-        Ok(public_ip)
-    }
-
-    pub async fn get_instance_ip(&self) -> Result<IpAddr, AWSClientError<InstanceError>> {
-        let reservations = self.get_reservations().await?;
-        let ip = self.get_ip_from_reservations(reservations)?;
-        println!("IP: {}", ip);
-        Ok(ip)
-    }
+    // async fn get_reservations(
+    //     &self,
+    // ) -> Result<Option<Vec<Reservation>>, AWSClientError<InstanceError>> {
+    //     let di_res = self
+    //         .ec2_client
+    //         .describe_instances(DescribeInstancesRequest {
+    //             instance_ids: Some(vec![self.instance_id.clone()]),
+    //             ..Default::default()
+    //         })
+    //         .await?;
+    //     Ok(di_res.reservations)
+    // }
+    //
+    // fn get_ip_from_reservations(
+    //     &self,
+    //     reservations: Option<Vec<Reservation>>,
+    // ) -> Result<IpAddr, InstanceError> {
+    //     // We're expecting one and only one instance,
+    //     // so there should only be one reservation with one instance
+    //     let reservation = get_only_item(&reservations)?;
+    //     let instance = get_only_item(&reservation.instances)?;
+    //
+    //     self.is_instance_sane(instance)?;
+    //     let public_ip = get_public_ip(instance)?;
+    //     Ok(public_ip)
+    // }
+    //
+    // pub async fn get_instance_ip(&self) -> Result<IpAddr, AWSClientError<InstanceError>> {
+    //     let reservations = self.get_reservations().await?;
+    //     let ip = self.get_ip_from_reservations(reservations)?;
+    //     println!("IP: {}", ip);
+    //     Ok(ip)
+    // }
 
     async fn get_security_groups(&self) -> SGClientResult<Option<Vec<SecurityGroup>>> {
         let dsg_res = self
@@ -174,7 +173,7 @@ impl AWSClient {
     }
 
     /// Removes all IPs with the configured id and given rules
-    pub async fn sg_cleanup(&self, rules: Vec<IPRule>) -> SGClientResult<()> {
+    pub async fn sg_cleanup(&self, rules: &Vec<IPRule>) -> SGClientResult<()> {
         let sec_groups = self.get_security_groups().await?;
         let sg = get_only_item(&sec_groups)?;
         let authorized_ips: Vec<&str> = rules.iter().flat_map(|ip_rule| ips_for_rule_in_sg(ip_rule, sg)).collect();
@@ -192,7 +191,7 @@ impl AWSClient {
     /// Authorize the configured rules
     ///
     /// Will log a warning if a rule (proto / port / ip) is already present
-    pub async fn sg_authorize(&self, rules: Vec<IPRule>) -> SGClientResult<()> {
+    pub async fn sg_authorize(&self, rules: &Vec<IPRule>) -> SGClientResult<()> {
         // Looping over the rules in order to allow the request to fail in case of duplication
         // Calling the EC2 API with several rules will fail completely if one of them is duplicated.
         for rule in rules {
