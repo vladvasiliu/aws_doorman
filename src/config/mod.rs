@@ -168,15 +168,15 @@ fn check_sg_format(sg: String) -> Result<(), String> {
     }
 }
 
-fn check_instance_format(sg: String) -> Result<(), String> {
-    lazy_static! {
-        static ref RE: Regex = Regex::new(r"\A(?i:i-([[:alnum:]]{8}|[[:alnum:]]{17}))\z").unwrap();
-    }
-    match RE.is_match(&sg) {
-        true => Ok(()),
-        false => Err("expected format is 'i-1234567890abcdef0'".to_string())
-    }
-}
+// fn check_instance_format(sg: String) -> Result<(), String> {
+//     lazy_static! {
+//         static ref RE: Regex = Regex::new(r"\A(?i:i-([[:alnum:]]{8}|[[:alnum:]]{17}))\z").unwrap();
+//     }
+//     match RE.is_match(&sg) {
+//         true => Ok(()),
+//         false => Err("expected format is 'i-1234567890abcdef0'".to_string())
+//     }
+// }
 
 fn check_ip_protocol(sg: String) -> Result<(), String> {
     lazy_static! {

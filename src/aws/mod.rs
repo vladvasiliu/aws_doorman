@@ -1,5 +1,5 @@
 use log::{error, info, warn};
-use std::{fmt, net::IpAddr, result::Result};
+use std::fmt;
 
 use rusoto_ec2::{
     AuthorizeSecurityGroupIngressRequest, DescribeSecurityGroupsRequest,
@@ -9,7 +9,7 @@ use rusoto_ec2::{
 use crate::aws::error::{
     AWSClientError, SGAuthorizeIngressError, SGClientResult, SecurityGroupError,
 };
-use crate::aws::helpers::{get_only_item, get_public_ip, has_security_group, is_running, ips_for_rule_in_sg};
+use crate::aws::helpers::{get_only_item, ips_for_rule_in_sg};
 use std::fmt::Formatter;
 
 mod error;
