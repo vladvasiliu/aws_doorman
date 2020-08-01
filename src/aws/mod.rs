@@ -70,7 +70,7 @@ impl PartialEq<IpPermission> for IPRule {
     fn eq(&self, other: &IpPermission) -> bool {
         Some(self.from_port) == other.from_port
             && Some(self.to_port) == other.to_port
-            && Some(&self.ip_protocol) == other.ip_protocol.as_ref()
+            && Some(&self.ip_protocol.to_lowercase()) == other.ip_protocol.as_ref()
     }
 }
 
@@ -78,7 +78,7 @@ impl PartialEq<IPRule> for IpPermission {
     fn eq(&self, other: &IPRule) -> bool {
         self.from_port == Some(other.from_port)
             && self.to_port == Some(other.to_port)
-            && self.ip_protocol.as_ref() == Some(&other.ip_protocol)
+            && self.ip_protocol.as_ref() == Some(&other.ip_protocol.to_lowercase())
     }
 }
 
