@@ -91,13 +91,12 @@ impl AWSClient {
         Ok(dsg_res.security_groups)
     }
 
-    async fn authorize_sg_ingress(&self, rules: Vec<IPRule>, ips: &[&str]) -> SGClientResult<()> {
-        let ip_permissions: Vec<IpPermission> = rules
-            .iter()
-            .map(|rule| rule.to_ip_permission_with_ips(ips))
-            .collect();
+    /// Authorize a security group ingress rule
+    ///
+    /// Only do one at a time to be able to handle errors on a rule-by-rule basis.
+    async fn authorize_sg_ingress(&self, rule: &IPRule, ips: &[&str]) -> SGClientResult<()> {
         let request = AuthorizeSecurityGroupIngressRequest {
-            ip_permissions: Some(ip_permissions),
+            ip_permissions: Some(vec![rule.to_ip_permission_with_ips(ips)]),
             group_id: Some(self.sg_id.to_string()),
             ..Default::default()
         };
@@ -123,6 +122,12 @@ impl AWSClient {
 
     /// Removes all IPs with the configured id and given rules
     pub async fn sg_cleanup(&self, rules: &[IPRule]) -> SGClientResult<()> {
+        // Each AWS Security Group rule is identified by (at least) its protocol and
+        // IP Range / Prefix List / UserID Group Pair.
+        // As such, in order to remove the rules for a given protocol / port / description, we have
+        // to go through all the entries and fetch their IPs
+        // More info:
+        // https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_RevokeSecurityGroupIngress.html
         let sec_groups = self.get_security_groups().await?;
         let sg = get_only_item(&sec_groups)?;
         let authorized_ips: Vec<&str> = rules
@@ -148,7 +153,7 @@ impl AWSClient {
         // Looping over the rules in order to allow the request to fail in case of duplication
         // Calling the EC2 API with several rules will fail completely if one of them is duplicated.
         for rule in rules {
-            match self.authorize_sg_ingress(vec![rule.clone()], ips).await {
+            match self.authorize_sg_ingress(rule, ips).await {
                 Ok(()) => (),
                 Err(AWSClientError::Service(SecurityGroupError::AuthorizeIngressError(
                     SGAuthorizeIngressError::DuplicateRule(_),

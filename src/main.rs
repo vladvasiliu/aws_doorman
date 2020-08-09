@@ -41,7 +41,7 @@ async fn main() {
 
 async fn work(config: Config) -> Result<(), Box<dyn Error>> {
     let ip_rules = vec![IPRule {
-        id: config.sg_id.to_owned(),
+        id: config.sg_desc.to_owned(),
         // ip: config.external_ip.unwrap().to_string().add("/32"),
         from_port: config.from_port,
         to_port: config.to_port,
@@ -53,17 +53,18 @@ async fn work(config: Config) -> Result<(), Box<dyn Error>> {
         sg_id: config.sg_id.to_owned(),
     };
 
-    let external_ip = match config.external_ip {
-        Some(ip) => ip,
-        None => get_ip().await.unwrap_or_else(|| {
-            error!("Failed to determine external ip.");
-            exit(1)
-        }),
-    };
+    // let external_ip = match config.external_ip {
+    //     Some(ip) => ip,
+    //     None => get_ip().await.unwrap_or_else(|| {
+    //         error!("Failed to determine external ip.");
+    //         exit(1)
+    //     }),
+    // };
+    // let external_ip = "192.168.2.2/32";
 
-    aws_client
-        .sg_authorize(&ip_rules, &[&external_ip.to_string()])
-        .await?;
+    // aws_client
+    //     .sg_authorize(&ip_rules, &[&external_ip.to_string()])
+    //     .await?;
 
     if config.cleanup {
         info!("Cleaning up...");

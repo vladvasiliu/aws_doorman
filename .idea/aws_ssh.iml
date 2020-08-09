@@ -178,6 +178,8 @@
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/crc32fast-7368be816e40e440/out" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/syn-7a1767ed2cffc847/out" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/indexmap-1e76f05032b94ba0/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/hashbrown-a6107bb90fc49057/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/generic-array-a54cf894c7d7630b/out" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
