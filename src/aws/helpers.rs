@@ -120,11 +120,10 @@ mod tests {
                 ..Default::default()
             };
             let rule = IPRule {
-                id: ip_rule_id.to_owned(),
+                id: ip_rule_id,
                 from_port,
                 to_port,
-                ip_protocol: ip_protocol.to_owned(),
-                ..Default::default()
+                ip_protocol,
             };
             let res = ips_for_rule_in_sg(&rule, &sg);
             assert_eq!(ip_vec, res)
