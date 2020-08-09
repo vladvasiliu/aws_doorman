@@ -5,50 +5,9 @@ use http::StatusCode;
 use rusoto_core::request::BufferedHttpResponse;
 use rusoto_core::RusotoError;
 use rusoto_ec2::{
-    AuthorizeSecurityGroupIngressError, DescribeSecurityGroupsError, RevokeSecurityGroupIngressError
+    AuthorizeSecurityGroupIngressError, DescribeSecurityGroupsError,
+    RevokeSecurityGroupIngressError,
 };
-
-// #[derive(Debug)]
-// pub enum InstanceError {
-//     ReturnedNone,
-//     ReturnedTooMany,
-//     NoPublicIP,
-//     MalformedPublicIP(AddrParseError),
-//     SecurityGroupNotAttached,
-//     IncorrectState(String),
-//     UnknownError(RusotoError<DescribeInstancesError>),
-// }
-//
-// impl Error for InstanceError {}
-//
-// impl fmt::Display for InstanceError {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-//         match self {
-//             Self::ReturnedNone => write!(f, "no instances returned"),
-//             Self::ReturnedTooMany => write!(f, "too many instances returned"),
-//             Self::NoPublicIP => write!(f, "no public ip"),
-//             Self::MalformedPublicIP(err) => write!(f, "malformed public IP: {}", err),
-//             Self::SecurityGroupNotAttached => write!(f, "requested security group is not attached"),
-//             Self::IncorrectState(err) => write!(f, "incorrect state: {}", err),
-//             Self::UnknownError(err) => write!(f, "unknown error: {}", err),
-//         }
-//     }
-// }
-//
-// impl From<CardinalityError> for InstanceError {
-//     fn from(err: CardinalityError) -> Self {
-//         match err {
-//             CardinalityError::TooMany => Self::ReturnedTooMany,
-//             CardinalityError::None => Self::ReturnedNone,
-//         }
-//     }
-// }
-//
-// impl From<RusotoError<DescribeInstancesError>> for InstanceError {
-//     fn from(err: RusotoError<DescribeInstancesError>) -> Self {
-//         Self::UnknownError(err)
-//     }
-// }
 
 #[derive(Debug)]
 pub enum SGAuthorizeIngressError {
@@ -103,7 +62,7 @@ impl From<HttpResponseDescription> for SGAuthorizeIngressError {
         match error_detail.code.as_deref() {
             Some("InvalidPermission.Duplicate") => Self::DuplicateRule(err),
             Some("InvalidPermission.Malformed") => Self::MalformedRule(err),
-            Some("RulesPerSecurityGroupLimitExceeded") => return Self::RuleLimitExceeded(err),
+            Some("RulesPerSecurityGroupLimitExceeded") => Self::RuleLimitExceeded(err),
             _ => Self::UnknownHttpError(err),
         }
     }
@@ -126,7 +85,6 @@ impl fmt::Display for SGRevokeIngressError {
         }
     }
 }
-
 
 impl From<RusotoError<RevokeSecurityGroupIngressError>> for SGRevokeIngressError {
     fn from(err: RusotoError<RevokeSecurityGroupIngressError>) -> Self {
@@ -166,7 +124,7 @@ impl From<HttpResponseDescription> for SGRevokeIngressError {
 pub enum SecurityGroupError {
     ReturnedTooMany,
     ReturnedNone,
-    DescribeError(HttpResponseDescription),
+    // DescribeError(HttpResponseDescription),
     AuthorizeIngressError(SGAuthorizeIngressError),
     RevokeIngressError(SGRevokeIngressError),
     NotFound(HttpResponseDescription),
@@ -180,7 +138,7 @@ impl fmt::Display for SecurityGroupError {
         match self {
             Self::ReturnedNone => write!(f, "No security groups returned"),
             Self::ReturnedTooMany => write!(f, "Too many security groups returned"),
-            Self::DescribeError(err) => write!(f, "Failed to get security group: {}", err),
+            // Self::DescribeError(err) => write!(f, "Failed to get security group: {}", err),
             Self::AuthorizeIngressError(err) => write!(f, "Failed to authorize ip: {}", err),
             Self::RevokeIngressError(err) => write!(f, "Failed to revoke ip: {}", err),
             Self::NotFound(err) => write!(f, "{}", err),
@@ -201,8 +159,12 @@ impl From<CardinalityError> for SecurityGroupError {
 impl From<RusotoError<DescribeSecurityGroupsError>> for SecurityGroupError {
     fn from(err: RusotoError<DescribeSecurityGroupsError>) -> Self {
         match err {
-            RusotoError::Unknown(buffered_http_response) if buffered_http_response.status == StatusCode::NOT_FOUND => Self::NotFound(buffered_http_response.into()),
-            _ => Self::UnknownError(err.into())
+            RusotoError::Unknown(buffered_http_response)
+                if buffered_http_response.status == StatusCode::NOT_FOUND =>
+            {
+                Self::NotFound(buffered_http_response.into())
+            }
+            _ => Self::UnknownError(err.into()),
         }
     }
 }
@@ -212,7 +174,6 @@ impl From<RusotoError<AuthorizeSecurityGroupIngressError>> for SecurityGroupErro
         Self::AuthorizeIngressError(err.into())
     }
 }
-
 
 impl From<RusotoError<RevokeSecurityGroupIngressError>> for SecurityGroupError {
     fn from(err: RusotoError<RevokeSecurityGroupIngressError>) -> Self {
@@ -253,23 +214,11 @@ impl<E: Error + 'static, F: std::convert::From<RusotoError<E>>> From<RusotoError
     }
 }
 
-// impl From<InstanceError> for AWSClientError<InstanceError> {
-//     fn from(err: InstanceError) -> Self {
-//         Self::Service(err)
-//     }
-// }
-
 impl From<SecurityGroupError> for AWSClientError<SecurityGroupError> {
     fn from(err: SecurityGroupError) -> Self {
         Self::Service(err)
     }
 }
-
-// impl From<AddrParseError> for InstanceError {
-//     fn from(err: AddrParseError) -> Self {
-//         Self::MalformedPublicIP(err)
-//     }
-// }
 
 impl From<CardinalityError> for AWSClientError<SecurityGroupError> {
     fn from(err: CardinalityError) -> Self {

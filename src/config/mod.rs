@@ -1,14 +1,12 @@
-
+use crate::config::error::ConfigError;
 use clap::{crate_name, crate_version, App, AppSettings, Arg};
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::net::IpAddr;
-use std::str::FromStr;
-use crate::config::error::ConfigError;
 use std::num::ParseIntError;
+use std::str::FromStr;
 
 pub mod error;
-
 
 #[derive(Debug)]
 pub struct Config {
@@ -36,7 +34,7 @@ impl Config {
                     .takes_value(false)
                     .required(false)
                     .multiple(false)
-                    .help("Only clean up the rules")
+                    .help("Only clean up the rules"),
             )
             .arg(
                 Arg::with_name("debug")
@@ -77,7 +75,7 @@ impl Config {
                     .required(true)
                     .multiple(false)
                     .help("AWS Security Group ID")
-                    .validator(check_sg_format)
+                    .validator(check_sg_format),
             )
             .arg(
                 Arg::with_name("sg_desc")
@@ -96,7 +94,7 @@ impl Config {
                     .required(true)
                     .multiple(false)
                     .help("IP protocol")
-                    .validator(check_ip_protocol)
+                    .validator(check_ip_protocol),
             )
             .arg(
                 Arg::with_name("from_port")
@@ -107,7 +105,7 @@ impl Config {
                     .required(true)
                     .multiple(false)
                     .help("from port")
-                    .validator(check_port_number)
+                    .validator(check_port_number),
             )
             .arg(
                 Arg::with_name("to_port")
@@ -117,7 +115,7 @@ impl Config {
                     .required(false)
                     .multiple(false)
                     .help("to port")
-                    .validator(check_port_number)
+                    .validator(check_port_number),
             )
             .get_matches();
 
@@ -141,7 +139,9 @@ impl Config {
         };
 
         if to_port < from_port {
-            return Err(ConfigError::IncorrectPortRange("Ports should be in ascending order".to_string()))
+            return Err(ConfigError::IncorrectPortRange(
+                "Ports should be in ascending order".to_string(),
+            ));
         }
 
         Ok(Self {
@@ -164,19 +164,9 @@ fn check_sg_format(sg: String) -> Result<(), String> {
     }
     match RE.is_match(&sg) {
         true => Ok(()),
-        false => Err("expected format is 'sg-1234567890abcdef0'".to_string())
+        false => Err("the expected format is 'sg-1234567890abcdef0'".to_string()),
     }
 }
-
-// fn check_instance_format(sg: String) -> Result<(), String> {
-//     lazy_static! {
-//         static ref RE: Regex = Regex::new(r"\A(?i:i-([[:alnum:]]{8}|[[:alnum:]]{17}))\z").unwrap();
-//     }
-//     match RE.is_match(&sg) {
-//         true => Ok(()),
-//         false => Err("expected format is 'i-1234567890abcdef0'".to_string())
-//     }
-// }
 
 fn check_ip_protocol(sg: String) -> Result<(), String> {
     lazy_static! {
@@ -184,19 +174,21 @@ fn check_ip_protocol(sg: String) -> Result<(), String> {
     }
     match RE.is_match(&sg) {
         true => Ok(()),
-        false => Err("expected 'tcp' or 'udp'".to_string())
+        false => Err("expected 'tcp' or 'udp'".to_string()),
     }
 }
 
 fn check_port_number(value: String) -> Result<(), String> {
-    let int_value: i64 = value.parse().or_else(|err: ParseIntError| Err(err.to_string()))?;
+    let int_value: i64 = value
+        .parse()
+        .map_err(|err: ParseIntError| err.to_string())?;
     if int_value < 0 || int_value > 65535 {
-        return Err("port number should be between 0 and 65535".to_string())
+        return Err("port number should be between 0 and 65535".to_string());
     }
     Ok(())
 }
 
 fn check_ip(value: String) -> Result<(), String> {
-    IpAddr::from_str(&value).or_else(|err| Err(err.to_string()))?;
+    IpAddr::from_str(&value).map_err(|err| err.to_string())?;
     Ok(())
 }
