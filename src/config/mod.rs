@@ -45,17 +45,6 @@ impl Config {
                     .multiple(false)
                     .help("Enable debug logging"),
             )
-            // .arg(
-            //     Arg::with_name("instance_id")
-            //         .short("i")
-            //         .long("instance")
-            //         .value_name("INSTANCE ID")
-            //         .takes_value(true)
-            //         .required(true)
-            //         .multiple(false)
-            //         .help("AWS Instance ID")
-            // .validator(check_instance_format)
-            // )
             .arg(
                 Arg::with_name("ip")
                     .long("ip")

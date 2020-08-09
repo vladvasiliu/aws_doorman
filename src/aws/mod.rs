@@ -18,27 +18,9 @@ pub mod helpers;
 #[derive(Clone, Debug, Default)]
 pub struct IPRule {
     pub id: String,
-    pub ip: String,
     pub from_port: i64,
     pub to_port: i64,
     pub ip_protocol: String,
-}
-
-impl From<IPRule> for IpPermission {
-    fn from(ip_rule: IPRule) -> Self {
-        let ip_range = IpRange {
-            description: Some(ip_rule.id),
-            cidr_ip: Some(ip_rule.ip),
-        };
-
-        Self {
-            from_port: Some(ip_rule.from_port),
-            to_port: Some(ip_rule.to_port),
-            ip_protocol: Some(ip_rule.ip_protocol),
-            ip_ranges: Some(vec![ip_range]),
-            ..Default::default()
-        }
-    }
 }
 
 impl IPRule {
@@ -67,7 +49,7 @@ impl fmt::Display for IPRule {
         } else {
             format!("{}", self.from_port)
         };
-        write!(f, "{} {} from {}", self.ip_protocol, range, self.ip)
+        write!(f, "{} {}", self.ip_protocol, range)
     }
 }
 
@@ -109,9 +91,11 @@ impl AWSClient {
         Ok(dsg_res.security_groups)
     }
 
-    async fn authorize_sg_ingress(&self, rules: Vec<IPRule>) -> SGClientResult<()> {
-        let ip_permissions: Vec<IpPermission> =
-            rules.iter().map(|rule| rule.clone().into()).collect();
+    async fn authorize_sg_ingress(&self, rules: Vec<IPRule>, ips: &[&str]) -> SGClientResult<()> {
+        let ip_permissions: Vec<IpPermission> = rules
+            .iter()
+            .map(|rule| rule.to_ip_permission_with_ips(ips))
+            .collect();
         let request = AuthorizeSecurityGroupIngressRequest {
             ip_permissions: Some(ip_permissions),
             group_id: Some(self.sg_id.to_string()),
@@ -160,11 +144,11 @@ impl AWSClient {
     /// Authorize the configured rules
     ///
     /// Will log a warning if a rule (proto / port / ip) is already present
-    pub async fn sg_authorize(&self, rules: &[IPRule]) -> SGClientResult<()> {
+    pub async fn sg_authorize(&self, rules: &[IPRule], ips: &[&str]) -> SGClientResult<()> {
         // Looping over the rules in order to allow the request to fail in case of duplication
         // Calling the EC2 API with several rules will fail completely if one of them is duplicated.
         for rule in rules {
-            match self.authorize_sg_ingress(vec![rule.clone()]).await {
+            match self.authorize_sg_ingress(vec![rule.clone()], ips).await {
                 Ok(()) => (),
                 Err(AWSClientError::Service(SecurityGroupError::AuthorizeIngressError(
                     SGAuthorizeIngressError::DuplicateRule(_),

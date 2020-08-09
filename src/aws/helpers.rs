@@ -1,42 +1,7 @@
-use rusoto_ec2::{SecurityGroup};
+use rusoto_ec2::SecurityGroup;
 
 use crate::aws::error::CardinalityError;
 use crate::aws::IPRule;
-
-// pub fn is_running(instance: &Instance) -> Result<bool, InstanceError> {
-//     match &instance.state {
-//         Some(InstanceState { code: Some(16), .. }) => Ok(true),
-//         Some(state) => {
-//             let code = state.code.unwrap_or_default();
-//             let name = state.name.as_deref().unwrap_or_default();
-//             Err(InstanceError::IncorrectState(format!(
-//                 "{} - {}",
-//                 code, name
-//             )))
-//         }
-//         None => Err(InstanceError::IncorrectState("unknown".to_string())),
-//     }
-// }
-
-// pub fn has_security_group(instance: &Instance, sg_id: &str) -> Result<bool, InstanceError> {
-//     if let Some(sg_vec) = &instance.security_groups {
-//         if sg_vec
-//             .iter()
-//             .any(|x| x.group_id == Some(String::from(sg_id)))
-//         {
-//             return Ok(true);
-//         }
-//     }
-//
-//     Err(InstanceError::SecurityGroupNotAttached)
-// }
-
-// pub fn get_public_ip(instance: &Instance) -> Result<IpAddr, InstanceError> {
-//     match &instance.public_ip_address {
-//         None => Err(InstanceError::NoPublicIP),
-//         Some(ip) => ip.parse().map_err(InstanceError::MalformedPublicIP),
-//     }
-// }
 
 pub fn get_only_item<T>(item_vec: &Option<Vec<T>>) -> Result<&T, CardinalityError> {
     match item_vec {
@@ -52,21 +17,31 @@ pub fn get_only_item<T>(item_vec: &Option<Vec<T>>) -> Result<&T, CardinalityErro
 /// An AWS Security Group Rule is identified by its ports and protocols.
 /// IpAddr doesn't have a netmask, so this function has to return a str
 pub fn ips_for_rule_in_sg<'a>(rule: &IPRule, sg: &'a SecurityGroup) -> Vec<&'a str> {
-    sg.ip_permissions.as_ref().map_or_else(Vec::new, |ip_permission_vec| {
-        ip_permission_vec.iter()
-            .filter(|ip_permission|{rule == *ip_permission})
-            .flat_map(|ip_permission| {
-                ip_permission.ip_ranges.as_ref().map_or_else(Vec::new, |ip_range_vec| {
-                    ip_range_vec.iter().filter_map(|ip_range| {
-                        if ip_range.description.as_ref() == Some(&rule.id) {
-                            ip_range.cidr_ip.as_deref()
-                        } else {
-                            None
-                        }
-                    }).collect()
+    sg.ip_permissions
+        .as_ref()
+        .map_or_else(Vec::new, |ip_permission_vec| {
+            ip_permission_vec
+                .iter()
+                .filter(|ip_permission| rule == *ip_permission)
+                .flat_map(|ip_permission| {
+                    ip_permission
+                        .ip_ranges
+                        .as_ref()
+                        .map_or_else(Vec::new, |ip_range_vec| {
+                            ip_range_vec
+                                .iter()
+                                .filter_map(|ip_range| {
+                                    if ip_range.description.as_ref() == Some(&rule.id) {
+                                        ip_range.cidr_ip.as_deref()
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect()
+                        })
                 })
-            }).collect()
-    })
+                .collect()
+        })
 }
 
 #[cfg(test)]
@@ -79,7 +54,7 @@ mod tests {
 
         #[test]
         fn returns_empty_vec_for_sg_with_none_permissions() {
-            let sg = SecurityGroup{
+            let sg = SecurityGroup {
                 ip_permissions: None,
                 ..Default::default()
             };
@@ -90,7 +65,7 @@ mod tests {
 
         #[test]
         fn returns_empty_vec_for_sg_with_empty_permissions() {
-            let sg = SecurityGroup{
+            let sg = SecurityGroup {
                 ip_permissions: Some(vec![]),
                 ..Default::default()
             };
@@ -107,7 +82,7 @@ mod tests {
                 ip_protocol: Some("tcp".into()),
                 ..Default::default()
             };
-            let sg = SecurityGroup{
+            let sg = SecurityGroup {
                 ip_permissions: Some(vec![ip_permission]),
                 ..Default::default()
             };
@@ -123,14 +98,15 @@ mod tests {
             let to_port: i64 = 10;
             let ip_protocol = String::from("tcp");
 
-            let ip_vec = vec![
-                String::from("1.1.1.1/32"),
-                String::from("2.2.2.2/32"),
-            ];
+            let ip_vec = vec![String::from("1.1.1.1/32"), String::from("2.2.2.2/32")];
 
-            let ip_ranges = ip_vec.iter().map(|ip| {
-                IpRange {cidr_ip: Some(ip.to_owned()), description: Some(ip_rule_id.to_owned())}
-            }).collect();
+            let ip_ranges = ip_vec
+                .iter()
+                .map(|ip| IpRange {
+                    cidr_ip: Some(ip.to_owned()),
+                    description: Some(ip_rule_id.to_owned()),
+                })
+                .collect();
 
             let ip_permission = IpPermission {
                 from_port: Some(from_port),
@@ -139,7 +115,7 @@ mod tests {
                 ip_ranges: Some(ip_ranges),
                 ..Default::default()
             };
-            let sg = SecurityGroup{
+            let sg = SecurityGroup {
                 ip_permissions: Some(vec![ip_permission]),
                 ..Default::default()
             };
@@ -156,8 +132,8 @@ mod tests {
     }
 
     mod get_only_item {
-        use crate::aws::helpers::get_only_item;
         use crate::aws::error::CardinalityError;
+        use crate::aws::helpers::get_only_item;
 
         #[test]
         fn error_for_none() {
