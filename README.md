@@ -1,4 +1,14 @@
-This is an utility that attempts to facilitate SSH access to AWS instances by updating a security group.
+# AWS Doorman
+
+AWS Doorman is a simple utility for facilitating access to AWS ressources that have restricted access by IP:
+
+* It retrieves the computer's external IP and adds it to an AWS EC2 Security Group.
+* It checks regularly what the IP is and updates the Security Group as needed.
+* It removes the IP when shutting down.
+* It works on Security Group rules that have a specific description.
+
+This is a tool I have developed as I've been working from home on a connection without a fixed IP address.
+The main use is avoiding a VPN connection which tends to not work too well on spotty cellular networks.
 
 The main use case is when a direct connection is necessary, e.g when using [Mosh], which requires UDP.
 
@@ -7,28 +17,46 @@ In the general case, prefer connecting via [AWS Session Manager].
 
 ## Status
 
-This project is in a very early stage. It does nothing useful as of yet.
+Development is in its early stages. It works for me ®, but your mileage may vary.
+
+### Known limitations
+
+* No IPv6 support.
+* No multi-home support.
 
 
-## What it does
+## Running
 
-1. Get instance details:
-    * External IP
-    * Attached security groups
-    * State
-    
-2. Get security group rules
-    1. If rule with same GUID exists, update it
-    2. If rule with GUID doesn't exist, creates it
+For the full list of options:
 
-3. Start external program
+```
+aws_doorman -h
+```
+
+There is no support for using AWS IAM Roles directly. It expects to retrieve the credentials from the usual places.
+
+I recommend using it with [AWS Vault]. AWS Vault handles assuming roles and
+dealing with MFA.
+
+Example using default credentials from `~/.aws/credentials`:
+
+```
+aws_doorman --sg-id sg-1234567890abcdef1 --sg-desc some-description --from 9999 --to 10000 --proto tcp --interval 120
+```
+
+Example using AWS role *some-role* from AWS Vault:
+
+```
+aws-vault exec --prompt=zenity some-role -- aws_doorman --sg-id sg-1234567890abcdef1 --sg-desc some-description --from 9999 --to 10000 --proto tcp --interval 120
+```
 
 
-## Build
+## Building
 
-This is developed using the latest stable Rust. Development happens on Linux and MacOS but it may work on Windows too.
+Doorman is developed on up-to-date Linux and MacOS using the latest Rust toolchain.
+It may work on Windows too, but it's not tested.
 
-To build:
+To build for production:
 
 ```sh
 cargo build --release
@@ -51,9 +79,11 @@ These are the requirements for building. They are needed by [external-ip] which 
 
 ## Development
 
+Contributions in the form of pull requests, issues, etc are welcome.
+
 Useful plugins:
 
-* [cargo-with]: Allows running a wrapper program to set environment variables.
+* [cargo-with] - Allows running a wrapper program to set environment variables.
 Useful for temporary AWS credentials during development.
 
 
@@ -64,6 +94,7 @@ This project is released under the terms of the GNU General Public License, vers
 Please see [`COPYING`](COPYING) for the full text of the license.
 
 
+[aws vault]: https://github.com/99designs/aws-vault "AWS Vault"
 [aws session manager]: https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-getting-started-enable-ssh-connections.html "AWS Session Manager Plugin"
 [cargo-with]: https://lib.rs/crates/cargo-with "cargo-with"
 [mosh]: https://mosh.org/ "Mosh"
