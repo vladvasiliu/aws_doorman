@@ -19,6 +19,7 @@ pub struct Config {
     pub to_port: i64,
     pub debug: bool,
     pub cleanup: bool,
+    pub interval: u16,
 }
 
 impl Config {
@@ -106,9 +107,21 @@ impl Config {
                     .help("to port")
                     .validator(check_port_number),
             )
+            .arg(
+                Arg::with_name("interval")
+                    .long("interval")
+                    .short("i")
+                    .takes_value(true)
+                    .value_name("interval")
+                    .required(false)
+                    .multiple(false)
+                    .help("Interval in seconds between external IP checks")
+                    .default_value("30")
+                    .validator(check_interval),
+            )
             .get_matches();
 
-        // let instance_id = matches.value_of("instance_id").unwrap().to_string();
+        let interval: u16 = matches.value_of("interval").unwrap().parse().unwrap();
         let sg_id = matches.value_of("sg_id").unwrap().to_string();
         let sg_desc = matches.value_of("sg_desc").unwrap().to_string();
         let debug = matches.is_present("debug");
@@ -134,7 +147,7 @@ impl Config {
         }
 
         Ok(Self {
-            // instance_id,
+            interval,
             sg_id,
             sg_desc,
             external_ip,
@@ -179,5 +192,13 @@ fn check_port_number(value: String) -> Result<(), String> {
 
 fn check_ip(value: String) -> Result<(), String> {
     IpAddr::from_str(&value).map_err(|err| err.to_string())?;
+    Ok(())
+}
+
+fn check_interval(value: String) -> Result<(), String> {
+    let int_value = value.parse::<u16>().map_err(|err| err.to_string())?;
+    if int_value < 1 {
+        return Err("Interval should be at least one second".to_string());
+    }
     Ok(())
 }
