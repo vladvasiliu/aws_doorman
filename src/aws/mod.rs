@@ -1,4 +1,4 @@
-use log::{error, info, warn};
+use log::{debug, error, warn};
 use std::fmt;
 
 use rusoto_ec2::{
@@ -29,7 +29,7 @@ impl IPRule {
             .iter()
             .map(|s| IpRange {
                 cidr_ip: Some(s.to_string()),
-                ..Default::default()
+                description: Some(self.id.to_owned()),
             })
             .collect();
         IpPermission {
@@ -139,7 +139,7 @@ impl AWSClient {
             .map(|ip_rule| ip_rule.to_ip_permission_with_ips(&authorized_ips))
             .collect();
         if authorized_ips.is_empty() {
-            info!("Nothing to delete!")
+            debug!("No rules to delete.")
         } else {
             self.revoke_sg_ingress(ip_permissions).await?;
         };

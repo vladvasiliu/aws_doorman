@@ -56,7 +56,11 @@ async fn work(config: Config) -> Result<(), Box<dyn Error>> {
         sg_id: config.sg_id.to_owned(),
     };
 
-    let mut timer = interval(Duration::from_secs(10));
+    let mut timer = interval(Duration::from_secs(config.interval));
+    info!(
+        "Sleeping {} seconds between external IP checks.",
+        config.interval
+    );
     let mut current_ip: Option<IpAddr> = None;
     loop {
         tokio::select! {
@@ -73,10 +77,7 @@ async fn work(config: Config) -> Result<(), Box<dyn Error>> {
                 current_ip = new_ip;
                 let external_ip = current_ip.unwrap().to_string().add("/32");
                 info!("Got new external IP: {}", external_ip);
-                if config.cleanup {
-                    info!("Cleaning up...");
-                    aws_client.sg_cleanup(&ip_rules).await?;
-                }
+                aws_client.sg_cleanup(&ip_rules).await?;
                 aws_client.sg_authorize(&ip_rules, &[&external_ip]).await?;
             }
             _ = ctrl_c() => {
