@@ -3,6 +3,7 @@ use std::process::exit;
 use log::{debug, error, info, LevelFilter};
 use rusoto_core::Region;
 use rusoto_ec2::Ec2Client;
+use tokio::signal::ctrl_c;
 use tokio::time::{interval, Duration};
 
 use crate::aws::{AWSClient, IPRule};
@@ -33,7 +34,7 @@ async fn main() {
     setup_logger(log_level).unwrap();
 
     match work(config).await {
-        Ok(()) => info!("Done!"),
+        Ok(()) => info!("Goodbye!"),
         Err(err) => {
             debug!("{:#?}", err);
             error!("{}", err);
@@ -45,7 +46,6 @@ async fn main() {
 async fn work(config: Config) -> Result<(), Box<dyn Error>> {
     let ip_rules = vec![IPRule {
         id: config.sg_desc.to_owned(),
-        // ip: config.external_ip.unwrap().to_string().add("/32"),
         from_port: config.from_port,
         to_port: config.to_port,
         ip_protocol: config.ip_protocol,
@@ -56,28 +56,37 @@ async fn work(config: Config) -> Result<(), Box<dyn Error>> {
         sg_id: config.sg_id.to_owned(),
     };
 
-    let mut timer = interval(Duration::from_secs(120));
+    let mut timer = interval(Duration::from_secs(10));
     let mut current_ip: Option<IpAddr> = None;
     loop {
-        timer.tick().await;
-        let new_ip = get_ip().await;
-        if new_ip.is_none() {
-            error!("Failed to determine external ip.");
-            continue;
-        };
-        if new_ip == current_ip {
-            info!("External IP didn't change.");
-            continue;
+        tokio::select! {
+            _ = timer.tick() => {
+                let new_ip = get_ip().await;
+                if new_ip.is_none() {
+                    error!("Failed to determine external ip.");
+                    continue;
+                };
+                if new_ip == current_ip {
+                    info!("External IP didn't change.");
+                    continue;
+                }
+                current_ip = new_ip;
+                let external_ip = current_ip.unwrap().to_string().add("/32");
+                info!("Got new external IP: {}", external_ip);
+                if config.cleanup {
+                    info!("Cleaning up...");
+                    aws_client.sg_cleanup(&ip_rules).await?;
+                }
+                aws_client.sg_authorize(&ip_rules, &[&external_ip]).await?;
+            }
+            _ = ctrl_c() => {
+                info!("Received ^C. Cleaning up...");
+                aws_client.sg_cleanup(&ip_rules).await?;
+                break;
+            }
         }
-        current_ip = new_ip;
-        let external_ip = current_ip.unwrap().to_string().add("/32");
-        info!("Got new external IP: {}", external_ip);
-        if config.cleanup {
-            info!("Cleaning up...");
-            aws_client.sg_cleanup(&ip_rules).await?;
-        }
-        aws_client.sg_authorize(&ip_rules, &[&external_ip]).await?;
     }
+    Ok(())
 }
 
 fn setup_logger(level: log::LevelFilter) -> Result<(), fern::InitError> {
