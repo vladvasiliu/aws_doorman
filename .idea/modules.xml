@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/aws_ssh.iml" filepath="$PROJECT_DIR$/.idea/aws_ssh.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/aws_doorman.iml" filepath="$PROJECT_DIR$/.idea/aws_doorman.iml" />
     </modules>
   </component>
 </project>
