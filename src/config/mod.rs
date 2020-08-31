@@ -1,29 +1,22 @@
-use crate::config::error::ConfigError;
 use clap::{crate_name, crate_version, App, AppSettings, Arg};
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::net::IpAddr;
-use std::num::ParseIntError;
 use std::str::FromStr;
-
-pub mod error;
 
 #[derive(Debug)]
 pub struct Config {
     // pub instance_id: String,
-    pub sg_id: String,
-    pub sg_desc: String,
+    pub prefix_list_id: String,
+    pub description: String,
     pub external_ip: Option<IpAddr>,
-    pub ip_protocol: String,
-    pub from_port: i64,
-    pub to_port: i64,
-    pub debug: bool,
+    pub verbose: bool,
     pub cleanup: bool,
     pub interval: u64,
 }
 
 impl Config {
-    pub fn from_args() -> Result<Self, ConfigError> {
+    pub fn from_args() -> Self {
         let matches = App::new(crate_name!())
             .version(crate_version!())
             .setting(AppSettings::ColoredHelp)
@@ -38,9 +31,9 @@ impl Config {
                     .help("Only clean up the rules"),
             )
             .arg(
-                Arg::with_name("debug")
-                    .short("d")
-                    .long("debug")
+                Arg::with_name("verbose")
+                    .short("v")
+                    .long("verbose")
                     .takes_value(false)
                     .required(false)
                     .multiple(false)
@@ -57,55 +50,26 @@ impl Config {
                     .validator(check_ip),
             )
             .arg(
-                Arg::with_name("sg_id")
-                    .short("s")
-                    .long("sg-id")
-                    .value_name("SECGROUP ID")
+                Arg::with_name("prefix_list_id")
+                    .short("p")
+                    .long("prefix-list-id")
+                    .value_name("PREFIX LIST ID")
                     .takes_value(true)
                     .required(true)
                     .multiple(false)
-                    .help("AWS Security Group ID")
-                    .validator(check_sg_format),
+                    .help("AWS prefix list ID")
+                    .validator(check_prefix_list_format),
             )
             .arg(
-                Arg::with_name("sg_desc")
-                    .long("sg-desc")
+                Arg::with_name("description")
+                    .short("d")
+                    .long("description")
+                    .value_name("DESCRIPTION")
                     .takes_value(true)
-                    .value_name("SG DESC")
                     .required(true)
                     .multiple(false)
-                    .help("SG description"),
-            )
-            .arg(
-                Arg::with_name("ip_protocol")
-                    .long("proto")
-                    .takes_value(true)
-                    .value_name("IP protocol")
-                    .required(true)
-                    .multiple(false)
-                    .help("IP protocol")
-                    .validator(check_ip_protocol),
-            )
-            .arg(
-                Arg::with_name("from_port")
-                    .long("from")
-                    .visible_alias("port")
-                    .takes_value(true)
-                    .value_name("FROM PORT")
-                    .required(true)
-                    .multiple(false)
-                    .help("from port")
-                    .validator(check_port_number),
-            )
-            .arg(
-                Arg::with_name("to_port")
-                    .long("to")
-                    .takes_value(true)
-                    .value_name("TO PORT")
-                    .required(false)
-                    .multiple(false)
-                    .help("to port")
-                    .validator(check_port_number),
+                    .help("Prefix list entry description")
+                    .validator(check_description),
             )
             .arg(
                 Arg::with_name("interval")
@@ -122,72 +86,45 @@ impl Config {
             .get_matches();
 
         let interval: u64 = matches.value_of("interval").unwrap().parse().unwrap();
-        let sg_id = matches.value_of("sg_id").unwrap().to_string();
-        let sg_desc = matches.value_of("sg_desc").unwrap().to_string();
-        let debug = matches.is_present("debug");
+        let prefix_list_id = matches.value_of("prefix_list_id").unwrap().to_string();
+        let description = matches.value_of("description").unwrap().to_string();
+        let verbose = matches.is_present("verbose");
         let cleanup = matches.is_present("cleanup");
-
-        let ip_protocol = matches.value_of("ip_protocol").unwrap().to_string();
-        let from_port: i64 = matches.value_of("from_port").unwrap().parse().unwrap();
-
-        let to_port: i64 = match matches.value_of("to_port") {
-            None => from_port,
-            Some(to_port) => to_port.parse().unwrap(),
-        };
 
         let external_ip = match matches.value_of("ip") {
             None => None,
             Some(ip_str) => Some(IpAddr::from_str(ip_str).unwrap()),
         };
 
-        if to_port < from_port {
-            return Err(ConfigError::IncorrectPortRange(
-                "Ports should be in ascending order".to_string(),
-            ));
-        }
-
-        Ok(Self {
+        Self {
             interval,
-            sg_id,
-            sg_desc,
+            prefix_list_id,
+            description,
             external_ip,
-            ip_protocol,
-            from_port,
-            to_port,
-            debug,
+            verbose,
             cleanup,
-        })
+        }
     }
 }
 
-fn check_sg_format(sg: String) -> Result<(), String> {
+fn check_prefix_list_format(pl: String) -> Result<(), String> {
     lazy_static! {
-        static ref RE: Regex = Regex::new(r"\A(?i:sg-([[:alnum:]]{8}|[[:alnum:]]{17}))\z").unwrap();
+        static ref RE: Regex = Regex::new(r"\A(?i:pl-([[:alnum:]]{8}|[[:alnum:]]{17}))\z").unwrap();
     }
-    match RE.is_match(&sg) {
+    match RE.is_match(&pl) {
         true => Ok(()),
-        false => Err("the expected format is 'sg-1234567890abcdef0'".to_string()),
+        false => Err("the expected format is 'pl-1234567890abcdef0'".to_string()),
     }
 }
 
-fn check_ip_protocol(sg: String) -> Result<(), String> {
+fn check_description(desc: String) -> Result<(), String> {
     lazy_static! {
-        static ref RE: Regex = Regex::new(r"\A(?i:(tcp)|(udp))\z").unwrap();
+        static ref RE: Regex = Regex::new(r"\A(?i:[[:alnum:]]{0, 255})\z").unwrap();
     }
-    match RE.is_match(&sg) {
+    match RE.is_match(&desc) {
         true => Ok(()),
-        false => Err("expected 'tcp' or 'udp'".to_string()),
+        false => Err("must contain up to 255 alphanumeric characters".to_string()),
     }
-}
-
-fn check_port_number(value: String) -> Result<(), String> {
-    let int_value: i64 = value
-        .parse()
-        .map_err(|err: ParseIntError| err.to_string())?;
-    if int_value < 0 || int_value > 65535 {
-        return Err("port number should be between 0 and 65535".to_string());
-    }
-    Ok(())
 }
 
 fn check_ip(value: String) -> Result<(), String> {

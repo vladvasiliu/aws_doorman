@@ -1,5 +1,5 @@
 [package]
-name = "aws_ssh"
+name = "aws_doorman"
 version = "0.1.0"
 authors = ["Vlad Vasiliu"]
 edition = "2018"

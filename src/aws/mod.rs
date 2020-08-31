@@ -1,168 +1,154 @@
-use log::{debug, error, warn};
-use std::fmt;
+mod error;
 
+use self::error::AWSError;
+use core::fmt;
 use rusoto_ec2::{
-    AuthorizeSecurityGroupIngressRequest, DescribeSecurityGroupsRequest, Ec2, Ec2Client,
-    IpPermission, IpRange, RevokeSecurityGroupIngressRequest, SecurityGroup,
+    AddPrefixListEntry, DescribeManagedPrefixListsRequest, Ec2, Ec2Client,
+    GetManagedPrefixListEntriesRequest, ManagedPrefixList, ModifyManagedPrefixListRequest,
+    PrefixListEntry, RemovePrefixListEntry,
 };
-
-use crate::aws::error::{
-    AWSClientError, SGAuthorizeIngressError, SGClientResult, SecurityGroupError,
-};
-use crate::aws::helpers::{get_only_item, ips_for_rule_in_sg};
 use std::fmt::Formatter;
 
-mod error;
-pub mod helpers;
+pub type AWSResult<T> = Result<T, AWSError>;
 
-#[derive(Clone, Debug, Default)]
-pub struct IPRule {
-    pub id: String,
-    pub from_port: i64,
-    pub to_port: i64,
-    pub ip_protocol: String,
+pub struct AWSClient<'a> {
+    ec2_client: &'a Ec2Client,
+    prefix_list_id: &'a str,
+    entry_description: &'a str,
 }
 
-impl IPRule {
-    pub fn to_ip_permission_with_ips(&self, ips: &[&str]) -> IpPermission {
-        let ip_ranges = ips
-            .iter()
-            .map(|s| IpRange {
-                cidr_ip: Some(s.to_string()),
-                description: Some(self.id.to_owned()),
-            })
-            .collect();
-        IpPermission {
-            from_port: Some(self.from_port),
-            to_port: Some(self.to_port),
-            ip_protocol: Some(self.ip_protocol.clone()),
-            ip_ranges: Some(ip_ranges),
+impl<'a> AWSClient<'a> {
+    pub async fn new(
+        ec2_client: &'a Ec2Client,
+        prefix_list_id: &'a str,
+        entry_description: &'a str,
+    ) -> AWSResult<AWSClient<'a>> {
+        Ok(Self {
+            ec2_client,
+            prefix_list_id,
+            entry_description,
+        })
+    }
+
+    async fn get_prefix_list(&self) -> AWSResult<ManagedPrefixList> {
+        let request = DescribeManagedPrefixListsRequest {
+            prefix_list_ids: Some(vec![self.prefix_list_id.to_owned()]),
             ..Default::default()
-        }
-    }
-}
-
-impl fmt::Display for IPRule {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let range = if self.from_port < self.to_port {
-            format!("{} - {}", self.from_port, self.to_port)
-        } else {
-            format!("{}", self.from_port)
         };
-        write!(f, "{} {}", self.ip_protocol, range)
-    }
-}
-
-impl PartialEq<IpPermission> for IPRule {
-    fn eq(&self, other: &IpPermission) -> bool {
-        Some(self.from_port) == other.from_port
-            && Some(self.to_port) == other.to_port
-            && Some(&self.ip_protocol.to_lowercase()) == other.ip_protocol.as_ref()
-    }
-}
-
-impl PartialEq<IPRule> for IpPermission {
-    fn eq(&self, other: &IPRule) -> bool {
-        self.from_port == Some(other.from_port)
-            && self.to_port == Some(other.to_port)
-            && self.ip_protocol.as_ref() == Some(&other.ip_protocol.to_lowercase())
-    }
-}
-
-pub struct AWSClient {
-    pub ec2_client: Ec2Client,
-    pub sg_id: String,
-}
-
-impl AWSClient {
-    async fn get_security_groups(&self) -> SGClientResult<Option<Vec<SecurityGroup>>> {
-        let dsg_res = self
+        let result = self
             .ec2_client
-            .describe_security_groups(DescribeSecurityGroupsRequest {
-                group_ids: Some(vec![self.sg_id.clone()]),
-                ..Default::default()
-            })
-            .await
-            .map_err(|err| {
-                error!("Failed to retrieve security group: {}", err);
-                SecurityGroupError::from(err)
-            })?;
-
-        Ok(dsg_res.security_groups)
-    }
-
-    /// Authorize a security group ingress rule
-    ///
-    /// Only do one at a time to be able to handle errors on a rule-by-rule basis.
-    async fn authorize_sg_ingress(&self, rule: &IPRule, ips: &[&str]) -> SGClientResult<()> {
-        let request = AuthorizeSecurityGroupIngressRequest {
-            ip_permissions: Some(vec![rule.to_ip_permission_with_ips(ips)]),
-            group_id: Some(self.sg_id.to_string()),
-            ..Default::default()
-        };
-
-        self.ec2_client
-            .authorize_security_group_ingress(request)
+            .describe_managed_prefix_lists(request)
             .await?;
-        Ok(())
-    }
 
-    async fn revoke_sg_ingress(&self, ip_permissions: Vec<IpPermission>) -> SGClientResult<()> {
-        let request = RevokeSecurityGroupIngressRequest {
-            group_id: Some(self.sg_id.to_owned()),
-            ip_permissions: Some(ip_permissions),
-            ..Default::default()
-        };
-
-        self.ec2_client
-            .revoke_security_group_ingress(request)
-            .await?;
-        Ok(())
-    }
-
-    /// Removes all IPs with the configured id and given rules
-    pub async fn sg_cleanup(&self, rules: &[IPRule]) -> SGClientResult<()> {
-        // Each AWS Security Group rule is identified by (at least) its protocol and
-        // IP Range / Prefix List / UserID Group Pair.
-        // As such, in order to remove the rules for a given protocol / port / description, we have
-        // to go through all the entries and fetch their IPs
-        // More info:
-        // https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_RevokeSecurityGroupIngress.html
-        let sec_groups = self.get_security_groups().await?;
-        let sg = get_only_item(&sec_groups)?;
-        let authorized_ips: Vec<&str> = rules
-            .iter()
-            .flat_map(|ip_rule| ips_for_rule_in_sg(ip_rule, sg))
-            .collect();
-        let ip_permissions: Vec<IpPermission> = rules
-            .iter()
-            .map(|ip_rule| ip_rule.to_ip_permission_with_ips(&authorized_ips))
-            .collect();
-        if authorized_ips.is_empty() {
-            debug!("No rules to delete.")
-        } else {
-            self.revoke_sg_ingress(ip_permissions).await?;
-        };
-        Ok(())
-    }
-
-    /// Authorize the configured rules
-    ///
-    /// Will log a warning if a rule (proto / port / ip) is already present
-    pub async fn sg_authorize(&self, rules: &[IPRule], ips: &[&str]) -> SGClientResult<()> {
-        // Looping over the rules in order to allow the request to fail in case of duplication
-        // Calling the EC2 API with several rules will fail completely if one of them is duplicated.
-        for rule in rules {
-            match self.authorize_sg_ingress(rule, ips).await {
-                Ok(()) => (),
-                Err(AWSClientError::Service(SecurityGroupError::AuthorizeIngressError(
-                    SGAuthorizeIngressError::DuplicateRule(_),
-                ))) => {
-                    warn!("Duplicate rule: {}", rule);
-                }
-                Err(err) => return Err(err),
-            }
+        // There should be at most one result, so next_token must be None and prefix_lists must have
+        // at most one element.
+        if result.next_token.is_some() {
+            return Err(AWSError::CardinalityError(
+                "Got too many prefix lists from AWS.".to_string(),
+            ));
         }
+        match result.prefix_lists {
+            None => Err(AWSError::CardinalityError(format!(
+                "Prefix list `{}` not found.",
+                self.prefix_list_id
+            ))),
+            Some(mpl_vec) => match mpl_vec.len() {
+                0 => Err(AWSError::CardinalityError(format!(
+                    "Prefix list `{}` not found.",
+                    self.prefix_list_id
+                ))),
+                1 => Ok(mpl_vec[0].clone()),
+                _ => Err(AWSError::CardinalityError(
+                    "Got too many prefix lists from AWS.".to_string(),
+                )),
+            },
+        }
+    }
+
+    /// Returns the prefix list entries for a given version
+    async fn get_entries(&self, version: Option<i64>) -> AWSResult<Vec<PrefixListEntry>> {
+        let mut entries = Vec::new();
+        let mut next_token: Option<String> = None;
+
+        loop {
+            let request = GetManagedPrefixListEntriesRequest {
+                next_token,
+                prefix_list_id: self.prefix_list_id.to_owned(),
+                target_version: version,
+                ..Default::default()
+            };
+            let result = self
+                .ec2_client
+                .get_managed_prefix_list_entries(request)
+                .await?;
+
+            // If there are no entries the result contains Some([]), so unwrap() should be safe.
+            entries.append(&mut result.entries.unwrap());
+
+            if result.next_token.is_none() {
+                break;
+            }
+            next_token = result.next_token;
+        }
+
+        Ok(entries)
+    }
+
+    async fn modify_prefix_list(
+        &self,
+        current_version: i64,
+        add_ips: Option<Vec<String>>,
+        remove_ips: Option<Vec<String>>,
+    ) -> AWSResult<()> {
+        let request = ModifyManagedPrefixListRequest {
+            prefix_list_id: self.prefix_list_id.to_owned(),
+            current_version: Some(current_version),
+            add_entries: add_ips.map(|ip_vec| {
+                ip_vec
+                    .into_iter()
+                    .map(|cidr| AddPrefixListEntry {
+                        cidr,
+                        description: Some(self.entry_description.to_owned()),
+                    })
+                    .collect()
+            }),
+            remove_entries: remove_ips.map(|ip_vec| {
+                ip_vec
+                    .into_iter()
+                    .map(|cidr| RemovePrefixListEntry { cidr })
+                    .collect()
+            }),
+            ..Default::default()
+        };
+        let result = self.ec2_client.modify_managed_prefix_list(request).await?;
+        println!("{:#?}", result);
         Ok(())
     }
 }
+
+// #[derive(Debug)]
+// pub struct PrefixList {
+//     pub managed_prefix_list: ManagedPrefixList,
+//     pub entries: Vec<PrefixListEntry>,
+// }
+//
+// impl fmt::Display for PrefixList {
+//     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+//         // All the printed fields are required at Managed Prefix List creation so unwrap() should
+//         // be safe.
+//         // https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_CreateManagedPrefixList.html
+//         let pl_id = self.managed_prefix_list.prefix_list_id.as_ref().unwrap();
+//         let pl_name = format!(
+//             " ({})",
+//             self.managed_prefix_list.prefix_list_name.as_ref().unwrap()
+//         );
+//         let pl_version = self.managed_prefix_list.version.unwrap();
+//         let addr_family = self.managed_prefix_list.address_family.as_ref().unwrap();
+//         let max_entries = self.managed_prefix_list.max_entries.unwrap();
+//         write!(
+//             f,
+//             "ID: {}{} version {}; family: {}; max entries: {}",
+//             pl_id, pl_name, pl_version, addr_family, max_entries
+//         )
+//     }
+// }
