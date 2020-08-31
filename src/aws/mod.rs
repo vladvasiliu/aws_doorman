@@ -1,6 +1,6 @@
 mod error;
 
-use self::error::AWSError;
+pub use self::error::AWSError;
 use core::fmt;
 use rusoto_ec2::{
     AddPrefixListEntry, DescribeManagedPrefixListsRequest, Ec2, Ec2Client,
@@ -150,6 +150,11 @@ impl<'a> AWSClient<'a> {
 
     pub async fn cleanup(&self, pl: &PrefixList) -> AWSResult<ManagedPrefixList> {
         let managed_ips = self.get_managed_ips(pl);
+        if managed_ips.is_empty() {
+            return Err(AWSError::NothingToDo(
+                "There are no IPs to clean up.".to_string(),
+            ));
+        }
         let result = self
             .modify_managed_prefix_list(pl, None, Some(managed_ips))
             .await?;

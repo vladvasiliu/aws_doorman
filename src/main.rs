@@ -1,8 +1,8 @@
-use log::LevelFilter;
+use log::{error, info, LevelFilter};
 use rusoto_core::Region;
 use rusoto_ec2::Ec2Client;
 
-use crate::aws::AWSClient;
+use crate::aws::{AWSClient, AWSError};
 use crate::config::Config;
 
 mod aws;
@@ -26,7 +26,11 @@ async fn main() {
     };
 
     let prefix_list = aws_client.get_prefix_list().await.unwrap();
-    println!("{:#?}", aws_client.cleanup(&prefix_list).await.unwrap());
+    match aws_client.cleanup(&prefix_list).await {
+        Ok(_) => info!("Done cleaning up"),
+        Err(AWSError::NothingToDo(err)) => info!("{}", err),
+        Err(err) => error!("Something went wrong: {}", err),
+    }
 }
 
 // async fn work(config: Config) -> Result<(), Box<dyn Error>> {

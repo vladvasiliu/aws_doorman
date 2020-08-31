@@ -8,6 +8,7 @@ use rusoto_ec2::{
 
 #[derive(Debug)]
 pub enum AWSError {
+    NothingToDo(String),
     CardinalityError(String),
     DescribeError(RusotoError<DescribeManagedPrefixListsError>),
     GetEntriesError(RusotoError<GetManagedPrefixListEntriesError>),
@@ -23,6 +24,7 @@ impl fmt::Display for AWSError {
             Self::DescribeError(err) => write!(f, "{}", err),
             Self::GetEntriesError(err) => write!(f, "{}", err),
             Self::ModifyError(err) => write!(f, "{}", err),
+            Self::NothingToDo(err) => write!(f, "{}", err),
         }
     }
 }
