@@ -19,9 +19,14 @@ async fn main() {
     setup_logger(log_level).unwrap();
 
     let ec2_client = Ec2Client::new(Region::EuWest3);
-    let aws_client = AWSClient::new(&ec2_client, &config.prefix_list_id, &config.description).await;
+    let aws_client = AWSClient {
+        ec2_client: &ec2_client,
+        prefix_list_id: &config.prefix_list_id,
+        entry_description: &config.description,
+    };
 
-    // println!("{:#?}", aws_client.cleanup().await);
+    let prefix_list = aws_client.get_prefix_list().await.unwrap();
+    println!("{:#?}", aws_client.cleanup(&prefix_list).await.unwrap());
 }
 
 // async fn work(config: Config) -> Result<(), Box<dyn Error>> {
