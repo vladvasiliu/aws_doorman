@@ -1,7 +1,9 @@
 mod error;
 
 pub use self::error::AWSError;
+
 use core::fmt;
+use log::debug;
 use rusoto_ec2::{
     AddPrefixListEntry, DescribeManagedPrefixListsRequest, Ec2, Ec2Client,
     GetManagedPrefixListEntriesRequest, ManagedPrefixList, ModifyManagedPrefixListRequest,
@@ -160,18 +162,31 @@ impl<'a> AWSClient<'a> {
     /// If no new IPs are given, all managed IPs are removed.
     pub async fn update_ips(
         &self,
-        pl: PrefixList,
+        pl: &PrefixList,
         ips: HashSet<&str>,
     ) -> AWSResult<ManagedPrefixList> {
         let managed_ips = self.get_managed_ips(&pl);
         let ips_to_add: HashSet<&str> = ips.difference(&managed_ips).copied().collect();
         let ips_to_remove: HashSet<&str> = managed_ips.difference(&ips).copied().collect();
         if ips_to_add.is_empty() && ips_to_remove.is_empty() {
+            debug!("No IPs to add or remove.");
             return Err(AWSError::NothingToDo(
                 "No IPs to add or remove.".to_string(),
             ));
         }
-        self.modify_managed_prefix_list(&pl, Some(ips_to_add), Some(ips_to_remove))
+        debug!(
+            "IPs to add: {}",
+            ips_to_add.iter().copied().collect::<Vec<&str>>().join(", ")
+        );
+        debug!(
+            "IPs to remove: {}",
+            ips_to_remove
+                .iter()
+                .copied()
+                .collect::<Vec<&str>>()
+                .join(", ")
+        );
+        self.modify_managed_prefix_list(pl, Some(ips_to_add), Some(ips_to_remove))
             .await
     }
 }
