@@ -7,6 +7,7 @@ use rusoto_ec2::{
     GetManagedPrefixListEntriesRequest, ManagedPrefixList, ModifyManagedPrefixListRequest,
     PrefixListEntry, RemovePrefixListEntry,
 };
+use std::collections::HashSet;
 use std::fmt::Formatter;
 
 pub type AWSResult<T> = Result<T, AWSError>;
@@ -88,26 +89,26 @@ impl<'a> AWSClient<'a> {
     async fn modify_managed_prefix_list(
         &self,
         prefix_list: &PrefixList,
-        add_ips: Option<Vec<&str>>,
-        remove_ips: Option<Vec<&str>>,
+        add_ips: Option<HashSet<&str>>,
+        remove_ips: Option<HashSet<&str>>,
     ) -> AWSResult<ManagedPrefixList> {
         let request = ModifyManagedPrefixListRequest {
             prefix_list_id: self.prefix_list_id.to_owned(),
             current_version: prefix_list.managed_prefix_list.version,
             add_entries: add_ips.map(|ip_vec| {
                 ip_vec
-                    .into_iter()
+                    .iter()
                     .map(|cidr| AddPrefixListEntry {
-                        cidr: cidr.to_owned(),
+                        cidr: cidr.to_string(),
                         description: Some(self.entry_description.to_owned()),
                     })
                     .collect()
             }),
             remove_entries: remove_ips.map(|ip_vec| {
                 ip_vec
-                    .into_iter()
+                    .iter()
                     .map(|cidr| RemovePrefixListEntry {
-                        cidr: cidr.to_owned(),
+                        cidr: cidr.to_string(),
                     })
                     .collect()
             }),
@@ -122,6 +123,7 @@ impl<'a> AWSClient<'a> {
         Ok(result)
     }
 
+    /// Returns a PrefixList, which is a local cache of the AWS ManagedPrefixList and its Entries.
     pub async fn get_prefix_list(&self) -> AWSResult<PrefixList> {
         let managed_prefix_list = self.get_managed_prefix_list().await?;
         let managed_prefix_entries = self
@@ -133,7 +135,12 @@ impl<'a> AWSClient<'a> {
         })
     }
 
-    pub fn get_managed_ips(&self, pl: &'a PrefixList) -> Vec<&'a str> {
+    /// Returns a set of IPs that are managed by us.
+    ///
+    /// An IP is managed if its description matches our description.
+    /// Attention!
+    /// Comparison is ASCII case-insensitive. This may have unexpected behaviours in some locales !
+    pub fn get_managed_ips(&self, pl: &'a PrefixList) -> HashSet<&'a str> {
         pl.managed_prefix_entries
             .iter()
             .filter_map(|entry| {
@@ -148,17 +155,24 @@ impl<'a> AWSClient<'a> {
             .collect()
     }
 
-    pub async fn cleanup(&self, pl: &PrefixList) -> AWSResult<ManagedPrefixList> {
-        let managed_ips = self.get_managed_ips(pl);
-        if managed_ips.is_empty() {
+    /// Add new IPs and remove old unused ones from the Prefix List.
+    ///
+    /// If no new IPs are given, all managed IPs are removed.
+    pub async fn update_ips(
+        &self,
+        pl: PrefixList,
+        ips: HashSet<&str>,
+    ) -> AWSResult<ManagedPrefixList> {
+        let managed_ips = self.get_managed_ips(&pl);
+        let ips_to_add: HashSet<&str> = ips.difference(&managed_ips).copied().collect();
+        let ips_to_remove: HashSet<&str> = managed_ips.difference(&ips).copied().collect();
+        if ips_to_add.is_empty() && ips_to_remove.is_empty() {
             return Err(AWSError::NothingToDo(
-                "There are no IPs to clean up.".to_string(),
+                "No IPs to add or remove.".to_string(),
             ));
         }
-        let result = self
-            .modify_managed_prefix_list(pl, None, Some(managed_ips))
-            .await?;
-        Ok(result)
+        self.modify_managed_prefix_list(&pl, Some(ips_to_add), Some(ips_to_remove))
+            .await
     }
 }
 

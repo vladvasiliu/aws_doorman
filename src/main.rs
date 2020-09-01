@@ -4,6 +4,7 @@ use rusoto_ec2::Ec2Client;
 
 use crate::aws::{AWSClient, AWSError};
 use crate::config::Config;
+use std::collections::HashSet;
 
 mod aws;
 mod config;
@@ -26,7 +27,8 @@ async fn main() {
     };
 
     let prefix_list = aws_client.get_prefix_list().await.unwrap();
-    match aws_client.cleanup(&prefix_list).await {
+    let ip_set: HashSet<&str> = [].iter().copied().collect();
+    match aws_client.update_ips(prefix_list, ip_set).await {
         Ok(_) => info!("Done cleaning up"),
         Err(AWSError::NothingToDo(err)) => info!("{}", err),
         Err(err) => error!("Something went wrong: {}", err),
