@@ -36,7 +36,7 @@ async fn main() {
 }
 
 async fn work(config: Config) -> Result<(), Box<dyn Error>> {
-    let ec2_client = Ec2Client::new(Region::EuWest3);
+    let ec2_client = Ec2Client::new(Region::default());
     let aws_client = AWSClient {
         ec2_client: &ec2_client,
         prefix_list_id: &config.prefix_list_id,

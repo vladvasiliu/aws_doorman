@@ -1,11 +1,15 @@
 # AWS Doorman
 
-AWS Doorman is a simple utility for facilitating access to AWS ressources that have restricted access by IP:
+AWS Doorman is a simple utility for facilitating access to AWS ressources that have restricted access by IP.
 
-* It retrieves the computer's external IP and adds it to an AWS EC2 Security Group.
-* It checks regularly what the IP is and updates the Security Group as needed.
+It keeps the entries of a prefix list up to date with the actual external IP.
+
+How it works:
+
+* It retrieves the computer's external IP and adds it to an AWS Managed Prefix List.
+* It checks regularly what the IP is and updates the Prefix List entries as needed.
 * It removes the IP when shutting down.
-* It works on Security Group rules that have a specific description.
+* It works on Managed Prefix List entries that have a specific description.
 
 This is a tool I have developed as I've been working from home on a connection without a fixed IP address.
 The main use is avoiding a VPN connection which tends to not work too well on spotty cellular networks.
@@ -41,13 +45,13 @@ dealing with MFA.
 Example using default credentials from `~/.aws/credentials`:
 
 ```
-aws_doorman --sg-id sg-1234567890abcdef1 --sg-desc some-description --from 9999 --to 10000 --proto tcp --interval 120
+aws_doorman --prefix-list-id pl-1234567890abcdef1 --description some-description --interval 120
 ```
 
 Example using AWS role *some-role* from AWS Vault:
 
 ```
-aws-vault exec --prompt=zenity some-role -- aws_doorman --sg-id sg-1234567890abcdef1 --sg-desc some-description --from 9999 --to 10000 --proto tcp --interval 120
+aws-vault exec --prompt=zenity some-role -- aws_doorman --prefix-list-id pl-1234567890abcdef1 --description some-description --interval 120
 ```
 
 
