@@ -101,7 +101,6 @@ dependencies = [
  "lazy_static",
  "log",
  "regex",
- "roxmltree",
  "rusoto_core",
  "rusoto_ec2",
  "rusoto_mock",
@@ -333,9 +332,9 @@ dependencies = [
 
 [[package]]
 name = "external-ip"
-version = "2.0.0"
+version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "349f3c6b3618d7abfecb8df02316d0be5fd18af73206b42928b015898703e5a7"
+checksum = "19ed3bd321be82a612c141159d7c381db6cc6def8b1261a324b3802ea2642511"
 dependencies = [
  "futures",
  "http",
@@ -343,6 +342,7 @@ dependencies = [
  "hyper-tls",
  "igd",
  "log",
+ "rand",
  "trust-dns-resolver",
 ]
 
@@ -1137,15 +1137,6 @@ checksum = "11834e137f3b14e309437a8276714eed3a80d1ef894869e510f2c0c0b98b9f4a"
 dependencies = [
  "hostname",
  "quick-error",
-]
-
-[[package]]
-name = "roxmltree"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5001f134077069d87f77c8b9452b690df2445f7a43f1c7ca4a1af8dd505789d"
-dependencies = [
- "xmlparser",
 ]
 
 [[package]]
@@ -1963,12 +1954,6 @@ name = "xml-rs"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b07db065a5cf61a7e4ba64f29e67db906fb1787316516c4e6e5ff0fea1efcd8a"
-
-[[package]]
-name = "xmlparser"
-version = "0.13.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "114ba2b24d2167ef6d67d7d04c8cc86522b87f490025f39f0303b7db5bf5e3d8"
 
 [[package]]
 name = "xmltree"

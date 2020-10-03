@@ -4,7 +4,7 @@ mod config;
 use crate::aws::{AWSClient, AWSError};
 use crate::config::Config;
 
-use external_ip::get_ip;
+use external_ip::{Consensus, Policy};
 use log::{debug, error, info, LevelFilter};
 use rusoto_core::Region;
 use rusoto_ec2::Ec2Client;
@@ -49,10 +49,11 @@ async fn work(config: Config) -> Result<(), Box<dyn Error>> {
         config.interval
     );
     let mut current_ip: Option<IpAddr> = None;
+    let consensus = external_ip_consensus();
     loop {
         tokio::select! {
             _ = timer.tick() => {
-                let new_ip = get_ip().await;
+                let new_ip: Option<IpAddr> = consensus.get_consensus().await;
                 if new_ip.is_none() {
                     error!("Failed to determine external ip.");
                     continue;
@@ -83,6 +84,14 @@ async fn work(config: Config) -> Result<(), Box<dyn Error>> {
         }
     }
     Ok(())
+}
+
+fn external_ip_consensus() -> Consensus {
+    let sources: external_ip::Sources = external_ip::get_sources();
+    external_ip::ConsensusBuilder::new()
+        .add_sources(sources)
+        .policy(Policy::All)
+        .build()
 }
 
 fn setup_logger(level: log::LevelFilter) -> Result<(), fern::InitError> {
