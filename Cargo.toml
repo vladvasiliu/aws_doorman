@@ -1,6 +1,6 @@
 [package]
 name = "aws_doorman"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Vlad Vasiliu"]
 edition = "2018"
 
@@ -11,7 +11,7 @@ clap = { version = "~2.33", features = ["color"] }
 #confy = "0.4"
 external-ip = "~2.0"
 fern = "~0.6"
-http = "~0.2.1"
+http = "~0.2"
 lazy_static = "~1.4"
 log = "~0.4"
 regex = "~1"
