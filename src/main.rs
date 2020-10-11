@@ -4,19 +4,19 @@ mod config;
 use crate::aws::{AWSClient, AWSError};
 use crate::config::Config;
 
+use color_eyre::Result;
 use external_ip::{Consensus, Policy};
-use log::{debug, error, info, LevelFilter};
+use log::{error, info, LevelFilter};
 use rusoto_core::Region;
 use rusoto_ec2::Ec2Client;
 use std::collections::HashSet;
-use std::error::Error;
 use std::net::IpAddr;
-use std::process::exit;
 use tokio::signal::ctrl_c;
 use tokio::time::{interval, Duration};
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
+    color_eyre::install()?;
     let config = Config::from_args();
 
     let log_level = match config.verbose {
@@ -25,17 +25,11 @@ async fn main() {
     };
     setup_logger(log_level).unwrap();
 
-    match work(config).await {
-        Ok(()) => info!("Goodbye!"),
-        Err(err) => {
-            debug!("{:#?}", err);
-            error!("{}", err);
-            exit(1)
-        }
-    }
+    work(config).await?;
+    Ok(())
 }
 
-async fn work(config: Config) -> Result<(), Box<dyn Error>> {
+async fn work(config: Config) -> Result<()> {
     let ec2_client = Ec2Client::new(Region::default());
     let aws_client = AWSClient {
         ec2_client: &ec2_client,
@@ -68,11 +62,10 @@ async fn work(config: Config) -> Result<(), Box<dyn Error>> {
                 let mut ip_set: HashSet<&str> = HashSet::new();
                 ip_set.insert(&external_ip);
                 match aws_client.update_ips(&prefix_list, ip_set).await {
-                    Err(AWSError::NothingToDo(_)) => continue,
+                    Err(AWSError::NothingToDo(_)) => (),
                     Err(e) => return Err(e.into()),
-                    Ok(_) => (),
+                    Ok(_) => prefix_list = aws_client.get_prefix_list().await?,
                 }
-                prefix_list = aws_client.get_prefix_list().await?;
             }
             _ = ctrl_c() => {
                 info!("Received ^C. Cleaning up...");
