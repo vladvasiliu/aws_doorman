@@ -5,12 +5,12 @@ use crate::aws::{AWSClient, AWSError};
 use crate::config::Config;
 
 use color_eyre::Result;
-use external_ip::{Consensus, Policy};
 use log::{error, info, LevelFilter};
+use query_external_ip::Consensus;
 use rusoto_core::Region;
 use rusoto_ec2::Ec2Client;
 use std::collections::HashSet;
-use std::net::IpAddr;
+use std::net::Ipv4Addr;
 use tokio::signal::ctrl_c;
 use tokio::time::{interval, Duration};
 
@@ -42,15 +42,16 @@ async fn work(config: Config) -> Result<()> {
         "Sleeping {} seconds between external IP checks.",
         config.interval
     );
-    let mut current_ip: Option<IpAddr> = None;
-    let consensus = external_ip_consensus();
+    let mut current_ip: Option<Ipv4Addr> = None;
     loop {
         tokio::select! {
             _ = timer.tick() => {
-                let new_ip: Option<IpAddr> = consensus.get_consensus().await;
-                if new_ip.is_none() {
-                    error!("Failed to determine external ip.");
-                    continue;
+                let new_ip = match Consensus::get().await {
+                    Ok(c) => c.v4(),
+                    Err(err) => {
+                        error!("Failed to determine external IP: {}", err);
+                        None
+                    }
                 };
                 if new_ip == current_ip {
                     info!("External IP didn't change.");
@@ -77,14 +78,6 @@ async fn work(config: Config) -> Result<()> {
         }
     }
     Ok(())
-}
-
-fn external_ip_consensus() -> Consensus {
-    let sources: external_ip::Sources = external_ip::get_sources();
-    external_ip::ConsensusBuilder::new()
-        .add_sources(sources)
-        .policy(Policy::All)
-        .build()
 }
 
 fn setup_logger(level: log::LevelFilter) -> Result<(), fern::InitError> {
