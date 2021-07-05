@@ -46,7 +46,7 @@ impl Config {
                     .value_name("EXT IP")
                     .required(false)
                     .multiple(false)
-                    .help("External IP")
+                    .help("External IP (fixed mode)")
                     .validator(check_ip),
             )
             .arg(
@@ -80,7 +80,7 @@ impl Config {
                     .required(false)
                     .multiple(false)
                     .help("Interval in seconds between external IP checks")
-                    .default_value("60")
+                    .default_value("300")
                     .validator(check_interval),
             )
             .get_matches();
@@ -91,18 +91,17 @@ impl Config {
         let verbose = matches.is_present("verbose");
         let cleanup = matches.is_present("cleanup");
 
-        let external_ip = match matches.value_of("ip") {
-            None => None,
-            Some(ip_str) => Some(IpAddr::from_str(ip_str).unwrap()),
-        };
+        let external_ip = matches
+            .value_of("ip")
+            .map(|ip_str| IpAddr::from_str(ip_str).unwrap());
 
         Self {
-            interval,
             prefix_list_id,
             description,
             external_ip,
             verbose,
             cleanup,
+            interval,
         }
     }
 }

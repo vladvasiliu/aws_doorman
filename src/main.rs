@@ -12,7 +12,7 @@ use rusoto_ec2::Ec2Client;
 use std::collections::HashSet;
 use std::net::Ipv4Addr;
 use tokio::signal::ctrl_c;
-use tokio::time::{interval, Duration};
+use tokio::time::{interval, Duration, MissedTickBehavior};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -38,6 +38,7 @@ async fn work(config: Config) -> Result<()> {
     };
     let mut prefix_list = aws_client.get_prefix_list().await?;
     let mut timer = interval(Duration::from_secs(config.interval));
+    timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
     info!(
         "Sleeping {} seconds between external IP checks.",
         config.interval

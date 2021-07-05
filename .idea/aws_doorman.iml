@@ -243,6 +243,7 @@
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/indexmap-b5da280cd60eb083/out" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/indexmap-c76890ba47d6bbbd/out" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/libc-502e2d45f04c1fb2/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/tokio-ae1c6bc56fc6bdeb/out" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
