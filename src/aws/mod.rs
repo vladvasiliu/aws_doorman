@@ -1,219 +1,158 @@
-mod error;
-
-pub use self::error::AWSError;
-
-use core::fmt;
-use log::debug;
-use rusoto_ec2::{
-    AddPrefixListEntry, DescribeManagedPrefixListsRequest, Ec2, Ec2Client,
-    GetManagedPrefixListEntriesRequest, ManagedPrefixList, ModifyManagedPrefixListRequest,
-    PrefixListEntry, RemovePrefixListEntry,
+use aws_sdk_ec2::client::Client as EC2Client;
+use aws_sdk_ec2::model::{
+    AddPrefixListEntry, ManagedPrefixList, PrefixListState, RemovePrefixListEntry,
 };
-use std::collections::HashSet;
-use std::fmt::Formatter;
+use color_eyre::{eyre::eyre, Report, Result};
+use ipnet::IpNet;
+use tokio::time::{interval, timeout, Duration, MissedTickBehavior};
 
-pub type AWSResult<T> = Result<T, AWSError>;
+// pub use self::error::AWSError;
 
-pub struct AWSClient<'a> {
-    pub ec2_client: &'a Ec2Client,
-    pub prefix_list_id: &'a str,
-    pub entry_description: &'a str,
+// pub type AWSResult<T> = Result<T, AWSError>;
+
+// pub struct Entry {
+//     cidr: IpNet,
+//     description: String,
+// }
+//
+// impl TryFrom<&PrefixListEntry> for Entry {
+//     type Error = Report;
+//
+//     fn try_from(value: &PrefixListEntry) -> Result<Self> {
+//         let cidr = IpNet::from_str(value.cidr.as_ref().ok_or_else(|| eyre!("empty cidr"))?)?;
+//         let description = value.description.clone().unwrap_or_else(String::new);
+//         Ok(Self { cidr, description })
+//     }
+// }
+
+pub struct AWSClient {
+    ec2_client: EC2Client,
+    // prefix_list_v4_id: String,
+    // prefix_list_v6_id: String,
+    description: String,
 }
 
-impl<'a> AWSClient<'a> {
-    async fn get_managed_prefix_list(&self) -> AWSResult<ManagedPrefixList> {
-        let request = DescribeManagedPrefixListsRequest {
-            prefix_list_ids: Some(vec![self.prefix_list_id.to_owned()]),
-            ..Default::default()
-        };
-        let result = self
+impl AWSClient {
+    pub fn new(ec2_client: EC2Client, description: &str) -> Self {
+        Self {
+            ec2_client,
+            description: description.to_string(),
+        }
+    }
+
+    pub async fn get_prefix_list(&self, prefix_list_id: &str) -> Result<ManagedPrefixList> {
+        let response = self
             .ec2_client
-            .describe_managed_prefix_lists(request)
+            .describe_managed_prefix_lists()
+            .prefix_list_ids(prefix_list_id)
+            .send()
             .await?;
 
-        // There should be at most one result, so next_token must be None and prefix_lists must have
-        // at most one element.
-        if result.next_token.is_some() {
-            return Err(AWSError::CardinalityError(
-                "Got too many prefix lists from AWS.".to_string(),
+        // This should only return 0 or 1 prefix lists, any more is an error
+        if response.prefix_lists.is_none() || response.prefix_lists.as_ref().unwrap().is_empty() {
+            return Err(eyre!("Prefix list {} was not found.", prefix_list_id));
+        }
+
+        let prefix_lists = response.prefix_lists.unwrap();
+        if response.next_token.is_some() || prefix_lists.len() > 1 {
+            return Err(eyre!(
+                "Found too many prefix lists! This shouldn't happen..."
             ));
         }
-        match result.prefix_lists {
-            None => Err(AWSError::CardinalityError(format!(
-                "Prefix list `{}` not found.",
-                self.prefix_list_id
-            ))),
-            Some(mpl_vec) => match mpl_vec.len() {
-                0 => Err(AWSError::CardinalityError(format!(
-                    "Prefix list `{}` not found.",
-                    self.prefix_list_id
-                ))),
-                1 => Ok(mpl_vec[0].clone()),
-                _ => Err(AWSError::CardinalityError(
-                    "Got too many prefix lists from AWS.".to_string(),
-                )),
-            },
-        }
+
+        Ok(prefix_lists[0].clone())
     }
 
-    /// Returns the prefix list entries for a given version
-    async fn get_managed_prefix_entries(
+    // pub async fn get_v4_entries(&self) -> Result<Vec<Entry>> {
+    //     self.get_prefix_list_entries(&self.prefix_list_v4_id).await
+    // }
+    //
+    // pub async fn get_v6_entries(&self) -> Result<Vec<Entry>> {
+    //     self.get_prefix_list_entries(&self.prefix_list_v6_id).await
+    // }
+    //
+    // async fn get_prefix_list_entries(&self, prefix_list_id: &str) -> Result<Vec<Entry>> {
+    //     let mut token = None;
+    //     let mut total_entries: Vec<Entry> = Vec::new();
+    //
+    //     loop {
+    //         let response = self
+    //             .ec2_client
+    //             .get_managed_prefix_list_entries()
+    //             .prefix_list_id(prefix_list_id)
+    //             .set_next_token(token.clone())
+    //             .send()
+    //             .await?;
+    //
+    //         if let Some(entries) = response.entries {
+    //             entries.iter().for_each(|entry| match entry.try_into() {
+    //                 Ok(ip) => total_entries.push(ip),
+    //                 Err(err) => warn!("Failed to parse IP from Managed Prefix List entry: {}", err),
+    //             });
+    //         };
+    //
+    //         token = response.next_token;
+    //         if token.is_none() {
+    //             break;
+    //         }
+    //     }
+    //
+    //     Ok(total_entries)
+    // }
+
+    /// Modify the prefix list by adding and / or removing an entry.
+    pub async fn modify_entries(
         &self,
-        version: Option<i64>,
-    ) -> AWSResult<Vec<PrefixListEntry>> {
-        let mut entries = Vec::new();
-        let mut next_token: Option<String> = None;
-
-        loop {
-            let request = GetManagedPrefixListEntriesRequest {
-                next_token,
-                prefix_list_id: self.prefix_list_id.to_owned(),
-                target_version: version,
-                ..Default::default()
-            };
-            let result = self
-                .ec2_client
-                .get_managed_prefix_list_entries(request)
-                .await?;
-
-            // If there are no entries the result contains Some([]), so unwrap() should be safe.
-            entries.append(&mut result.entries.unwrap());
-
-            if result.next_token.is_none() {
-                break;
-            }
-            next_token = result.next_token;
-        }
-
-        Ok(entries)
-    }
-
-    async fn modify_managed_prefix_list(
-        &self,
-        prefix_list: &PrefixList,
-        add_ips: Option<HashSet<&str>>,
-        remove_ips: Option<HashSet<&str>>,
-    ) -> AWSResult<ManagedPrefixList> {
-        let request = ModifyManagedPrefixListRequest {
-            prefix_list_id: self.prefix_list_id.to_owned(),
-            current_version: prefix_list.managed_prefix_list.version,
-            add_entries: add_ips.map(|ip_vec| {
-                ip_vec
-                    .iter()
-                    .map(|cidr| AddPrefixListEntry {
-                        cidr: cidr.to_string(),
-                        description: Some(self.entry_description.to_owned()),
-                    })
-                    .collect()
-            }),
-            remove_entries: remove_ips.map(|ip_vec| {
-                ip_vec
-                    .iter()
-                    .map(|cidr| RemovePrefixListEntry {
-                        cidr: cidr.to_string(),
-                    })
-                    .collect()
-            }),
-            ..Default::default()
-        };
-        let result = self
+        prefix_list: &ManagedPrefixList,
+        add: Option<&IpNet>,
+        remove: Option<&IpNet>,
+    ) -> Result<ManagedPrefixList> {
+        let add_entries = add.map(|net| {
+            vec![AddPrefixListEntry::builder()
+                .cidr(net.to_string())
+                .description(&self.description)
+                .build()]
+        });
+        let remove_entries = remove.map(|net| {
+            vec![RemovePrefixListEntry::builder()
+                .cidr(net.to_string())
+                .build()]
+        });
+        let response = self
             .ec2_client
-            .modify_managed_prefix_list(request)
-            .await?
+            .modify_managed_prefix_list()
+            .prefix_list_id(prefix_list.prefix_list_id.as_ref().unwrap())
+            .set_current_version(prefix_list.version)
+            .set_add_entries(add_entries)
+            .set_remove_entries(remove_entries)
+            .send()
+            .await?;
+        response
             .prefix_list
-            .unwrap();
-        Ok(result)
+            .ok_or_else(|| eyre!("Modify Prefix List didn't return a prefix list."))
     }
 
-    /// Returns a PrefixList, which is a local cache of the AWS ManagedPrefixList and its Entries.
-    pub async fn get_prefix_list(&self) -> AWSResult<PrefixList> {
-        let managed_prefix_list = self.get_managed_prefix_list().await?;
-        let managed_prefix_entries = self
-            .get_managed_prefix_entries(managed_prefix_list.version)
-            .await?;
-        Ok(PrefixList {
-            managed_prefix_list,
-            managed_prefix_entries,
-        })
-    }
-
-    /// Returns a set of IPs that are managed by us.
-    ///
-    /// An IP is managed if its description matches our description.
-    /// Attention!
-    /// Comparison is ASCII case-insensitive. This may have unexpected behaviours in some locales !
-    pub fn get_managed_ips(&self, pl: &'a PrefixList) -> HashSet<&'a str> {
-        pl.managed_prefix_entries
-            .iter()
-            .filter_map(|entry| {
-                entry.description.as_ref().and_then(|desc| {
-                    if desc.eq_ignore_ascii_case(self.entry_description) {
-                        entry.cidr.as_deref()
-                    } else {
-                        None
-                    }
-                })
-            })
-            .collect()
-    }
-
-    /// Add new IPs and remove old unused ones from the Prefix List.
-    ///
-    /// If no new IPs are given, all managed IPs are removed.
-    pub async fn update_ips(
+    pub async fn wait_for_state(
         &self,
-        pl: &PrefixList,
-        ips: HashSet<&str>,
-    ) -> AWSResult<ManagedPrefixList> {
-        let managed_ips = self.get_managed_ips(&pl);
-        let ips_to_add: HashSet<&str> = ips.difference(&managed_ips).copied().collect();
-        let ips_to_remove: HashSet<&str> = managed_ips.difference(&ips).copied().collect();
-        if ips_to_add.is_empty() && ips_to_remove.is_empty() {
-            debug!("No IPs to add or remove.");
-            return Err(AWSError::NothingToDo(
-                "No IPs to add or remove.".to_string(),
-            ));
-        }
-        debug!(
-            "IPs to add: {}",
-            ips_to_add.iter().copied().collect::<Vec<&str>>().join(", ")
-        );
-        debug!(
-            "IPs to remove: {}",
-            ips_to_remove
-                .iter()
-                .copied()
-                .collect::<Vec<&str>>()
-                .join(", ")
-        );
-        self.modify_managed_prefix_list(pl, Some(ips_to_add), Some(ips_to_remove))
-            .await
-    }
-}
+        prefix_list_id: &str,
+        state: PrefixListState,
+        wait_timeout: Option<u64>,
+    ) -> Result<ManagedPrefixList> {
+        timeout(
+            Duration::from_secs(wait_timeout.unwrap_or(60)),
+            async move {
+                let mut interval_timer = interval(Duration::from_secs(10));
+                interval_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
-#[derive(Debug)]
-pub struct PrefixList {
-    pub managed_prefix_list: ManagedPrefixList,
-    pub managed_prefix_entries: Vec<PrefixListEntry>,
-}
-
-impl fmt::Display for PrefixList {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        // All the printed fields are required at Managed Prefix List creation so unwrap() should
-        // be safe.
-        // https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_CreateManagedPrefixList.html
-        let pl_id = self.managed_prefix_list.prefix_list_id.as_ref().unwrap();
-        let pl_name = format!(
-            " ({})",
-            self.managed_prefix_list.prefix_list_name.as_ref().unwrap()
-        );
-        let pl_version = self.managed_prefix_list.version.unwrap();
-        let addr_family = self.managed_prefix_list.address_family.as_ref().unwrap();
-        let max_entries = self.managed_prefix_list.max_entries.unwrap();
-        write!(
-            f,
-            "ID: {}{} version {}; family: {}; max entries: {}",
-            pl_id, pl_name, pl_version, addr_family, max_entries
+                loop {
+                    interval_timer.tick().await;
+                    let mpl = self.get_prefix_list(prefix_list_id).await?;
+                    if mpl.state.as_ref() == Some(&state) {
+                        return Ok::<ManagedPrefixList, Report>(mpl);
+                    }
+                }
+            },
         )
+        .await?
     }
 }

@@ -1,16 +1,15 @@
 mod aws;
 mod config;
 
-use crate::aws::{AWSClient, AWSError};
+use crate::aws::AWSClient;
 use crate::config::Config;
 
-use color_eyre::Result;
-use log::{error, info, LevelFilter};
+use aws_sdk_ec2::client::Client;
+use aws_sdk_ec2::model::{ManagedPrefixList, PrefixListState};
+use color_eyre::{Report, Result};
+use ipnet::IpNet;
+use log::{debug, error, info, LevelFilter};
 use query_external_ip::Consensus;
-use rusoto_core::Region;
-use rusoto_ec2::Ec2Client;
-use std::collections::HashSet;
-use std::net::Ipv4Addr;
 use tokio::signal::ctrl_c;
 use tokio::time::{interval, Duration, MissedTickBehavior};
 
@@ -30,54 +29,65 @@ async fn main() -> Result<()> {
 }
 
 async fn work(config: Config) -> Result<()> {
-    let ec2_client = Ec2Client::new(Region::default());
-    let aws_client = AWSClient {
-        ec2_client: &ec2_client,
-        prefix_list_id: &config.prefix_list_id,
-        entry_description: &config.description,
-    };
-    let mut prefix_list = aws_client.get_prefix_list().await?;
+    let ec2_client = Client::from_env();
+    let aws_client = AWSClient::new(ec2_client, "test-desc");
+
     let mut timer = interval(Duration::from_secs(config.interval));
     timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
+
     info!(
         "Sleeping {} seconds between external IP checks.",
         config.interval
     );
-    let mut current_ip: Option<Ipv4Addr> = None;
+
+    let mut current_cidr: Option<IpNet> = None;
+    let mut current_prefix_list: ManagedPrefixList =
+        aws_client.get_prefix_list(&config.prefix_list_id).await?;
+
     loop {
         tokio::select! {
             _ = timer.tick() => {
-                let new_ip = match Consensus::get().await {
-                    Ok(c) => c.v4(),
+                match Consensus::get().await.map_err(Report::from) {
                     Err(err) => {
-                        error!("Failed to determine external IP: {}", err);
-                        None
+                        error!("Failed to retrieve external IP: {}", err);
+                        continue;
                     }
-                };
-                if new_ip == current_ip {
-                    info!("External IP didn't change.");
-                    continue;
-                }
-                current_ip = new_ip;
-                let external_ip = format!("{}/32", current_ip.unwrap());
-                info!("Got new external IP: {}", external_ip);
-                let mut ip_set: HashSet<&str> = HashSet::new();
-                ip_set.insert(&external_ip);
-                match aws_client.update_ips(&prefix_list, ip_set).await {
-                    Err(AWSError::NothingToDo(_)) => (),
-                    Err(e) => return Err(e.into()),
-                    Ok(_) => prefix_list = aws_client.get_prefix_list().await?,
+                    Ok(consensus) => {
+                        let new_ip = consensus.v4();
+                        if new_ip.is_none() {
+                            error!("Failed to retrieve external IP. None found...");
+                            continue;
+                        }
+
+                        // This works because we know that `new_ip` is a valid IpV4
+                        let new_cidr = new_ip.map(|ip| {format!("{}/32", ip).parse::<IpNet>().unwrap()});
+
+                        if new_cidr == current_cidr {
+                            debug!("External IP didn't change.");
+                            continue;
+                        }
+
+                        match aws_client.modify_entries(&current_prefix_list, new_cidr.as_ref(), current_cidr.as_ref()).await {
+                            Err(err) => error!("Failed to modify prefix list: {:#?}", err),
+                            Ok(mpl) => {
+                                let new_prefix_list = aws_client.wait_for_state(&mpl.prefix_list_id.unwrap(), PrefixListState::ModifyComplete, None).await?;
+                                info!("Updated prefix list IP to {}", new_cidr.unwrap());
+                                current_prefix_list = new_prefix_list;
+                            }
+                        }
+
+                        current_cidr = new_cidr;
+                    }
                 }
             }
             _ = ctrl_c() => {
                 info!("Received ^C. Cleaning up...");
-                let empty_ips = HashSet::new();
-                let prefix_list = aws_client.get_prefix_list().await?;
-                aws_client.update_ips(&prefix_list, empty_ips).await?;
+                aws_client.modify_entries(&current_prefix_list, None, current_cidr.as_ref()).await?;
                 break;
             }
         }
     }
+
     Ok(())
 }
 

@@ -1,16 +1,10 @@
 use core::fmt;
 use std::error::Error;
 
-use rusoto_core::RusotoError;
-use rusoto_ec2::{
-    DescribeManagedPrefixListsError, GetManagedPrefixListEntriesError, ModifyManagedPrefixListError,
-};
-
 #[derive(Debug)]
 pub enum AWSError {
     NothingToDo(String),
     CardinalityError(String),
-    DescribeError(RusotoError<DescribeManagedPrefixListsError>),
     GetEntriesError(RusotoError<GetManagedPrefixListEntriesError>),
     ModifyError(RusotoError<ModifyManagedPrefixListError>),
 }
@@ -26,23 +20,5 @@ impl fmt::Display for AWSError {
             Self::ModifyError(err) => write!(f, "{}", err),
             Self::NothingToDo(err) => write!(f, "{}", err),
         }
-    }
-}
-
-impl From<RusotoError<DescribeManagedPrefixListsError>> for AWSError {
-    fn from(err: RusotoError<DescribeManagedPrefixListsError>) -> Self {
-        Self::DescribeError(err)
-    }
-}
-
-impl From<RusotoError<GetManagedPrefixListEntriesError>> for AWSError {
-    fn from(err: RusotoError<GetManagedPrefixListEntriesError>) -> Self {
-        Self::GetEntriesError(err)
-    }
-}
-
-impl From<RusotoError<ModifyManagedPrefixListError>> for AWSError {
-    fn from(err: RusotoError<ModifyManagedPrefixListError>) -> Self {
-        Self::ModifyError(err)
     }
 }

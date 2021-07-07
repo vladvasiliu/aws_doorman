@@ -239,11 +239,17 @@
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/time-c495e1ef213370e2/out" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/tokio-647bbb7469c22eb4/out" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/typenum-94cf3725bec03280/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/aws-types-6e067b948b8391e5/out" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/encoding_rs-b4ee5b7c56e2a10a/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/futures-util-397dbe9c92a5f407/out" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/indexmap-b5da280cd60eb083/out" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/indexmap-c76890ba47d6bbbd/out" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/libc-502e2d45f04c1fb2/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/proc-macro-error-3b8e6d48b046185f/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/proc-macro-error-attr-861a866ebbd7f719/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/ring-1358b9abd2ecd6ba/out" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/tokio-ae1c6bc56fc6bdeb/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/tokio-e48199401d225c98/out" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
