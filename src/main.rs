@@ -34,6 +34,13 @@ async fn work(config: Config) -> Result<()> {
     let ec2_client = Client::from_env();
     let aws_client = AWSClient::new(ec2_client, "test-desc");
 
+    if config.cleanup {
+        info!("Running in cleanup mode...");
+        aws_client.cleanup(&config.prefix_list_id).await?;
+        info!("Done!");
+        return Ok(());
+    }
+
     let mut timer = interval(Duration::from_secs(config.interval));
     timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
