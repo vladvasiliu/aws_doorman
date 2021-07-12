@@ -4,7 +4,8 @@ use aws_sdk_ec2::model::{
 };
 use color_eyre::{eyre::eyre, Report, Result};
 use ipnet::IpNet;
-use tokio::time::{interval, timeout, Duration, MissedTickBehavior};
+use std::cmp::min;
+use tokio::time::{sleep, timeout, Duration};
 
 // pub use self::error::AWSError;
 
@@ -170,15 +171,18 @@ impl AWSClient {
         timeout(
             Duration::from_secs(wait_timeout.unwrap_or(60)),
             async move {
-                let mut interval_timer = interval(Duration::from_secs(10));
-                interval_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
+                // Wait at least one second, as the change doesn't finish immediately.
+                let mut duration = Duration::from_secs(1);
+                let max_duration = Duration::from_secs(5);
 
                 loop {
-                    interval_timer.tick().await;
+                    sleep(duration).await;
                     let mpl = self.get_prefix_list(prefix_list_id).await?;
                     if mpl.state.as_ref() == Some(&state) {
                         return Ok::<ManagedPrefixList, Report>(mpl);
                     }
+
+                    duration = min(duration + Duration::from_secs(1), max_duration);
                 }
             },
         )
