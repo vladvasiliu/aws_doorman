@@ -106,6 +106,12 @@ async fn work(config: Config) -> Result<()> {
 }
 
 fn setup_logger(level: log::LevelFilter) -> Result<(), fern::InitError> {
+    let default_level = if level == LevelFilter::Debug {
+        level
+    } else {
+        LevelFilter::Warn
+    };
+
     fern::Dispatch::new()
         .format(move |out, message, record| {
             out.finish(format_args!(
@@ -117,7 +123,8 @@ fn setup_logger(level: log::LevelFilter) -> Result<(), fern::InitError> {
                 message
             ))
         })
-        .level(level)
+        .level(default_level)
+        .level_for("aws_doorman", level)
         .chain(std::io::stdout())
         //        .chain(fern::log_file("output.log")?)
         .apply()?;
