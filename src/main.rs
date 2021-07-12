@@ -67,7 +67,9 @@ async fn work(config: Config) -> Result<()> {
                             continue;
                         }
 
-                        match aws_client.modify_entries(&current_prefix_list, new_cidr.as_ref(), current_cidr.as_ref()).await {
+                        let add = new_cidr.iter().collect();
+                        let remove = current_cidr.iter().collect();
+                        match aws_client.modify_entries(&current_prefix_list, add, remove).await {
                             Err(err) => error!("Failed to modify prefix list: {:#?}", err),
                             Ok(mpl) => {
                                 let new_prefix_list = aws_client.wait_for_state(&mpl.prefix_list_id.unwrap(), PrefixListState::ModifyComplete, None).await?;
@@ -82,7 +84,7 @@ async fn work(config: Config) -> Result<()> {
             }
             _ = ctrl_c() => {
                 info!("Received ^C. Cleaning up...");
-                aws_client.modify_entries(&current_prefix_list, None, current_cidr.as_ref()).await?;
+                aws_client.cleanup(&config.prefix_list_id).await?;
                 break;
             }
         }

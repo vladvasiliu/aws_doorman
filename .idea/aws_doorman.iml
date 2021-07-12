@@ -252,6 +252,7 @@
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/tokio-e48199401d225c98/out" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/aws-types-59e3481d5aea37bd/out" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/tokio-bff8a88b9cef0876/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/libc-c833fdac4c3d603c/out" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

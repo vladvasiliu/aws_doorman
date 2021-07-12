@@ -1,6 +1,6 @@
 use aws_sdk_ec2::client::Client as EC2Client;
 use aws_sdk_ec2::model::{
-    AddPrefixListEntry, ManagedPrefixList, PrefixListState, RemovePrefixListEntry,
+    AddPrefixListEntry, ManagedPrefixList, PrefixListEntry, PrefixListState, RemovePrefixListEntry,
 };
 use color_eyre::{eyre::eyre, Report, Result};
 use ipnet::IpNet;
@@ -70,66 +70,95 @@ impl AWSClient {
     // pub async fn get_v6_entries(&self) -> Result<Vec<Entry>> {
     //     self.get_prefix_list_entries(&self.prefix_list_v6_id).await
     // }
-    //
-    // async fn get_prefix_list_entries(&self, prefix_list_id: &str) -> Result<Vec<Entry>> {
-    //     let mut token = None;
-    //     let mut total_entries: Vec<Entry> = Vec::new();
-    //
-    //     loop {
-    //         let response = self
-    //             .ec2_client
-    //             .get_managed_prefix_list_entries()
-    //             .prefix_list_id(prefix_list_id)
-    //             .set_next_token(token.clone())
-    //             .send()
-    //             .await?;
-    //
-    //         if let Some(entries) = response.entries {
-    //             entries.iter().for_each(|entry| match entry.try_into() {
-    //                 Ok(ip) => total_entries.push(ip),
-    //                 Err(err) => warn!("Failed to parse IP from Managed Prefix List entry: {}", err),
-    //             });
-    //         };
-    //
-    //         token = response.next_token;
-    //         if token.is_none() {
-    //             break;
-    //         }
-    //     }
-    //
-    //     Ok(total_entries)
-    // }
+
+    async fn get_prefix_list_entries(&self, prefix_list_id: &str) -> Result<Vec<PrefixListEntry>> {
+        let mut token = None;
+        let mut total_entries = Vec::new();
+
+        loop {
+            let response = self
+                .ec2_client
+                .get_managed_prefix_list_entries()
+                .prefix_list_id(prefix_list_id)
+                .set_next_token(token.clone())
+                .send()
+                .await?;
+
+            if let Some(entries) = response.entries {
+                entries
+                    .into_iter()
+                    .for_each(|entry| total_entries.push(entry))
+            };
+
+            token = response.next_token;
+            if token.is_none() {
+                break;
+            }
+        }
+
+        Ok(total_entries)
+    }
 
     /// Modify the prefix list by adding and / or removing an entry.
     pub async fn modify_entries(
         &self,
         prefix_list: &ManagedPrefixList,
-        add: Option<&IpNet>,
-        remove: Option<&IpNet>,
+        add: Vec<&IpNet>,
+        remove: Vec<&IpNet>,
     ) -> Result<ManagedPrefixList> {
-        let add_entries = add.map(|net| {
-            vec![AddPrefixListEntry::builder()
-                .cidr(net.to_string())
-                .description(&self.description)
-                .build()]
-        });
-        let remove_entries = remove.map(|net| {
-            vec![RemovePrefixListEntry::builder()
-                .cidr(net.to_string())
-                .build()]
-        });
+        let add_entries = add
+            .iter()
+            .map(|net| {
+                AddPrefixListEntry::builder()
+                    .cidr(net.to_string())
+                    .description(&self.description)
+                    .build()
+            })
+            .collect();
+        let remove_entries = remove
+            .iter()
+            .map(|net| {
+                RemovePrefixListEntry::builder()
+                    .cidr(net.to_string())
+                    .build()
+            })
+            .collect();
         let response = self
             .ec2_client
             .modify_managed_prefix_list()
             .prefix_list_id(prefix_list.prefix_list_id.as_ref().unwrap())
             .set_current_version(prefix_list.version)
-            .set_add_entries(add_entries)
-            .set_remove_entries(remove_entries)
+            .set_add_entries(Some(add_entries))
+            .set_remove_entries(Some(remove_entries))
             .send()
             .await?;
         response
             .prefix_list
             .ok_or_else(|| eyre!("Modify Prefix List didn't return a prefix list."))
+    }
+
+    /// Removes entries having the configured description
+    pub async fn cleanup(&self, prefix_list_id: &str) -> Result<ManagedPrefixList> {
+        let entries = self.get_prefix_list_entries(prefix_list_id).await?;
+
+        let ips_to_clean: Vec<IpNet> = entries
+            .iter()
+            .filter_map(|entry| {
+                if entry.description.as_ref() == Some(&self.description) {
+                    Some(entry.cidr.as_ref().unwrap().parse().unwrap())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let pl = self.get_prefix_list(prefix_list_id).await?;
+        if ips_to_clean.is_empty() {
+            Ok(pl)
+        } else {
+            self.modify_entries(&pl, vec![], ips_to_clean.iter().collect())
+                .await
+        }
     }
 
     pub async fn wait_for_state(
