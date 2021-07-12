@@ -13,6 +13,7 @@ fern = "~0.6"
 ipnet = "2.3"
 lazy_static = "~1.4"
 log = "~0.4"
+notify-rust = "4"
 query_external_ip = "0.1.1"
 regex = "~1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time"] }

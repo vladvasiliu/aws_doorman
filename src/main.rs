@@ -1,8 +1,10 @@
 mod aws;
 mod config;
+mod notification;
 
 use crate::aws::AWSClient;
 use crate::config::Config;
+use crate::notification::notify;
 
 use aws_sdk_ec2::client::Client;
 use aws_sdk_ec2::model::{ManagedPrefixList, PrefixListState};
@@ -50,12 +52,14 @@ async fn work(config: Config) -> Result<()> {
                 match Consensus::get().await.map_err(Report::from) {
                     Err(err) => {
                         error!("Failed to retrieve external IP: {}", err);
+                        notify("Failed to retrieve external IP.", "", true)?;
                         continue;
                     }
                     Ok(consensus) => {
                         let new_ip = consensus.v4();
                         if new_ip.is_none() {
                             error!("Failed to retrieve external IP. None found...");
+                            notify("Failed to retrieve external IP.", "No IP found...", true)?;
                             continue;
                         }
 
@@ -74,6 +78,7 @@ async fn work(config: Config) -> Result<()> {
                             Ok(mpl) => {
                                 let new_prefix_list = aws_client.wait_for_state(&mpl.prefix_list_id.unwrap(), PrefixListState::ModifyComplete, None).await?;
                                 info!("Updated prefix list IP to {}", new_cidr.unwrap());
+                                notify("Updated prefix list", &format!("New IP: {}", new_cidr.unwrap()), false)?;
                                 current_prefix_list = new_prefix_list;
                             }
                         }
