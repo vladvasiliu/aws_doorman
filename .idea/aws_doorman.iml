@@ -261,6 +261,7 @@
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/openssl-sys-cb08a9f8863c8646/out" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/ring-2847ca9b3a08683d/out" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/tokio-8e692f2e8b3ac1b0/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/aws-types-ce8ccc855cfa6b4f/out" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
