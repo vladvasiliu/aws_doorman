@@ -31,7 +31,8 @@ async fn main() -> Result<()> {
 }
 
 async fn work(config: Config) -> Result<()> {
-    let ec2_client = Client::from_env();
+    let shared_config = aws_config::load_from_env().await;
+    let ec2_client = Client::new(&shared_config);
     let aws_client = AWSClient::new(ec2_client, "test-desc");
 
     if config.cleanup {
