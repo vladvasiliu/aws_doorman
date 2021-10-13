@@ -5,8 +5,8 @@ authors = ["Vlad Vasiliu"]
 edition = "2018"
 
 [dependencies]
-aws_config = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.18-alpha", package = "aws-config" }
-aws_sdk_ec2 = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.18-alpha", package = "aws-sdk-ec2" }
+aws_config = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.20-alpha", package = "aws-config" }
+aws_sdk_ec2 = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.20-alpha", package = "aws-sdk-ec2" }
 clap = { version = "~2.33", features = ["color"] }
 #confy = "0.4"
 color-eyre = "0.5"
