@@ -1,12 +1,12 @@
 [package]
 name = "aws_doorman"
-version = "0.3.3"
+version = "0.3.4"
 authors = ["Vlad Vasiliu"]
 edition = "2018"
 
 [dependencies]
-aws-config = "0.0.26-alpha"
-aws-sdk-ec2 = "0.0.26-alpha"
+aws-config = "0.2.0"
+aws-sdk-ec2 = "0.2.0"
 clap = { version = "~2.33", features = ["color"] }
 #confy = "0.4"
 color-eyre = "0.5"
