@@ -1,13 +1,13 @@
 [package]
 name = "aws_doorman"
-version = "0.3.4"
+version = "0.4.0"
 authors = ["Vlad Vasiliu"]
 edition = "2021"
 
 [dependencies]
 aws-config = "0.4.0"
 aws-sdk-ec2 = "0.4.0"
-clap = { version = "~2.33", features = ["color"] }
+clap = { version = "3", features = ["cargo", "regex"] }
 color-eyre = "0.5"
 fern = "~0.6"
 ipnet = "2.3"

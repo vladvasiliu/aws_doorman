@@ -1,4 +1,4 @@
-use clap::{crate_name, crate_version, App, AppSettings, Arg};
+use clap::{app_from_crate, AppSettings, Arg};
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::net::IpAddr;
@@ -17,68 +17,66 @@ pub struct Config {
 
 impl Config {
     pub fn from_args() -> Self {
-        let matches = App::new(crate_name!())
-            .version(crate_version!())
-            .setting(AppSettings::ColoredHelp)
+        let matches = app_from_crate!()
             .setting(AppSettings::DeriveDisplayOrder)
             .arg(
-                Arg::with_name("cleanup")
+                Arg::new("cleanup")
                     .long("cleanup")
-                    .short("c")
+                    .short('c')
                     .takes_value(false)
                     .required(false)
-                    .multiple(false)
+                    .multiple_occurrences(false)
                     .help("Only clean up the rules"),
             )
             .arg(
-                Arg::with_name("verbose")
-                    .short("v")
+                Arg::new("verbose")
+                    .short('v')
                     .long("verbose")
                     .takes_value(false)
                     .required(false)
-                    .multiple(false)
+                    .multiple_occurrences(false)
                     .help("Enable debug logging"),
             )
             .arg(
-                Arg::with_name("ip")
+                Arg::new("ip")
                     .long("ip")
                     .takes_value(true)
                     .value_name("EXT IP")
                     .required(false)
-                    .multiple(false)
+                    .multiple_occurrences(false)
                     .help("External IP (fixed mode)")
                     .validator(check_ip),
             )
             .arg(
-                Arg::with_name("prefix_list_id")
-                    .short("p")
+                Arg::new("prefix_list_id")
+                    .short('p')
                     .long("prefix-list-id")
                     .value_name("PREFIX LIST ID")
                     .takes_value(true)
                     .required(true)
-                    .multiple(false)
+                    .multiple_occurrences(false)
                     .help("AWS prefix list ID")
                     .validator(check_prefix_list_format),
             )
             .arg(
-                Arg::with_name("description")
-                    .short("d")
+                Arg::new("description")
+                    .short('d')
                     .long("description")
                     .value_name("DESCRIPTION")
                     .takes_value(true)
                     .required(true)
-                    .multiple(false)
+                    .multiple_occurrences(false)
                     .help("Prefix list entry description")
                     .validator(check_description),
             )
             .arg(
-                Arg::with_name("interval")
+                Arg::new("interval")
                     .long("interval")
-                    .short("i")
+                    .short('i')
                     .takes_value(true)
                     .value_name("interval")
                     .required(false)
-                    .multiple(false)
+                    .multiple_occurrences(false)
                     .help("Interval in seconds between external IP checks")
                     .default_value("300")
                     .validator(check_interval),
@@ -106,32 +104,32 @@ impl Config {
     }
 }
 
-fn check_prefix_list_format(pl: String) -> Result<(), String> {
+fn check_prefix_list_format(pl: &str) -> Result<(), String> {
     lazy_static! {
         static ref RE: Regex = Regex::new(r"\A(?i:pl-([[:alnum:]]{8}|[[:alnum:]]{17}))\z").unwrap();
     }
-    match RE.is_match(&pl) {
+    match RE.is_match(pl) {
         true => Ok(()),
         false => Err("the expected format is 'pl-1234567890abcdef0'".to_string()),
     }
 }
 
-fn check_description(desc: String) -> Result<(), String> {
+fn check_description(desc: &str) -> Result<(), String> {
     lazy_static! {
         static ref RE: Regex = Regex::new(r"\A(?i:[[:alnum:]]{0, 255})\z").unwrap();
     }
-    match RE.is_match(&desc) {
+    match RE.is_match(desc) {
         true => Ok(()),
         false => Err("must contain up to 255 alphanumeric characters".to_string()),
     }
 }
 
-fn check_ip(value: String) -> Result<(), String> {
-    IpAddr::from_str(&value).map_err(|err| err.to_string())?;
+fn check_ip(value: &str) -> Result<(), String> {
+    IpAddr::from_str(value).map_err(|err| err.to_string())?;
     Ok(())
 }
 
-fn check_interval(value: String) -> Result<(), String> {
+fn check_interval(value: &str) -> Result<(), String> {
     let int_value = value.parse::<u64>().map_err(|err| err.to_string())?;
     if int_value < 1 {
         return Err("Interval should be at least one second".to_string());
