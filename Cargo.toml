@@ -2,7 +2,7 @@
 name = "aws_doorman"
 version = "0.3.4"
 authors = ["Vlad Vasiliu"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 aws-config = "0.4.0"
