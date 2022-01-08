@@ -5,10 +5,9 @@ authors = ["Vlad Vasiliu"]
 edition = "2018"
 
 [dependencies]
-aws-config = "0.2.0"
-aws-sdk-ec2 = "0.2.0"
+aws-config = "0.4.0"
+aws-sdk-ec2 = "0.4.0"
 clap = { version = "~2.33", features = ["color"] }
-#confy = "0.4"
 color-eyre = "0.5"
 fern = "~0.6"
 ipnet = "2.3"
