@@ -1,4 +1,4 @@
-use clap::{app_from_crate, AppSettings, Arg};
+use clap::{command, AppSettings, Arg};
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::net::IpAddr;
@@ -17,7 +17,7 @@ pub struct Config {
 
 impl Config {
     pub fn from_args() -> Self {
-        let matches = app_from_crate!()
+        let matches = command!()
             .setting(AppSettings::DeriveDisplayOrder)
             .arg(
                 Arg::new("cleanup")
