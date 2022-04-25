@@ -116,7 +116,7 @@ fn check_prefix_list_format(pl: &str) -> Result<(), String> {
 
 fn check_description(desc: &str) -> Result<(), String> {
     lazy_static! {
-        static ref RE: Regex = Regex::new(r"\A(?i:[[:alnum:]]{0, 255})\z").unwrap();
+        static ref RE: Regex = Regex::new(r"\A(?i:([[:alnum:]]|[ -_]){0, 255})\z").unwrap();
     }
     match RE.is_match(desc) {
         true => Ok(()),
