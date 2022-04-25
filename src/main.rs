@@ -15,7 +15,7 @@ use query_external_ip::Consensus;
 use tokio::signal::ctrl_c;
 use tokio::time::{interval, Duration, MissedTickBehavior};
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     color_eyre::install()?;
     let config = Config::from_args();
@@ -106,7 +106,7 @@ async fn work(config: Config) -> Result<()> {
     Ok(())
 }
 
-fn setup_logger(level: log::LevelFilter) -> Result<(), fern::InitError> {
+fn setup_logger(level: LevelFilter) -> Result<(), fern::InitError> {
     let default_level = if level == LevelFilter::Debug {
         level
     } else {
