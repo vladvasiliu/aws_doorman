@@ -1,15 +1,15 @@
 use clap::{command, AppSettings, Arg};
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::net::IpAddr;
-use std::str::FromStr;
+// use std::net::IpAddr;
+// use std::str::FromStr;
 
 #[derive(Debug)]
 pub struct Config {
     // pub instance_id: String,
     pub prefix_list_id: String,
     pub description: String,
-    pub external_ip: Option<IpAddr>,
+    // pub external_ip: Option<IpAddr>,
     pub verbose: bool,
     pub cleanup: bool,
     pub interval: u64,
@@ -37,16 +37,16 @@ impl Config {
                     .multiple_occurrences(false)
                     .help("Enable debug logging"),
             )
-            .arg(
-                Arg::new("ip")
-                    .long("ip")
-                    .takes_value(true)
-                    .value_name("EXT IP")
-                    .required(false)
-                    .multiple_occurrences(false)
-                    .help("External IP (fixed mode)")
-                    .validator(check_ip),
-            )
+            // .arg(
+            //     Arg::new("ip")
+            //         .long("ip")
+            //         .takes_value(true)
+            //         .value_name("EXT IP")
+            //         .required(false)
+            //         .multiple_occurrences(false)
+            //         .help("External IP (fixed mode)")
+            //         .validator(check_ip),
+            // )
             .arg(
                 Arg::new("prefix_list_id")
                     .short('p')
@@ -89,14 +89,14 @@ impl Config {
         let verbose = matches.is_present("verbose");
         let cleanup = matches.is_present("cleanup");
 
-        let external_ip = matches
-            .value_of("ip")
-            .map(|ip_str| IpAddr::from_str(ip_str).unwrap());
+        // let external_ip = matches
+        //     .value_of("ip")
+        //     .map(|ip_str| IpAddr::from_str(ip_str).unwrap());
 
         Self {
             prefix_list_id,
             description,
-            external_ip,
+            // external_ip,
             verbose,
             cleanup,
             interval,
@@ -123,11 +123,11 @@ fn check_description(desc: &str) -> Result<(), String> {
         false => Err("must contain up to 255 alphanumeric characters".to_string()),
     }
 }
-
-fn check_ip(value: &str) -> Result<(), String> {
-    IpAddr::from_str(value).map_err(|err| err.to_string())?;
-    Ok(())
-}
+//
+// fn check_ip(value: &str) -> Result<(), String> {
+//     IpAddr::from_str(value).map_err(|err| err.to_string())?;
+//     Ok(())
+// }
 
 fn check_interval(value: &str) -> Result<(), String> {
     let int_value = value.parse::<u64>().map_err(|err| err.to_string())?;

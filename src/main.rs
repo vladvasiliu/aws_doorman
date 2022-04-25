@@ -33,7 +33,7 @@ async fn main() -> Result<()> {
 async fn work(config: Config) -> Result<()> {
     let shared_config = aws_config::load_from_env().await;
     let ec2_client = Client::new(&shared_config);
-    let aws_client = AWSClient::new(ec2_client, "test-desc");
+    let aws_client = AWSClient::new(ec2_client, &config.description);
 
     if config.cleanup {
         info!("Running in cleanup mode...");
