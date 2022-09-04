@@ -1,14 +1,14 @@
 [package]
 name = "aws_doorman"
-version = "0.4.3"
+version = "0.4.4"
 authors = ["Vlad Vasiliu"]
 edition = "2021"
 
 [dependencies]
-aws-config = "0.13"
-aws-sdk-ec2 = "0.13"
+aws-config = "0.48"
+aws-sdk-ec2 = "0.18"
 clap = { version = "3", features = ["cargo", "regex"] }
-color-eyre = "0.5"
+color-eyre = "0.6"
 fern = "~0.6"
 ipnet = "2"
 lazy_static = "~1.4"
